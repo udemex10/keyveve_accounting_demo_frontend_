@@ -75,7 +75,7 @@ import WorkflowTemplateSelector from "@/components/WorkflowTemplateSelector";
 import EnhancedProjectCard from "@/components/EnhancedProjectCard";
 
 // API base URL
-const API_BASE_URL = "http://localhost:8000";
+const API_BASE_URL = "https://keyveve-accounting-demo-backend.onrender.com";
 
 // Project status options
 const PROJECT_STATUSES = [

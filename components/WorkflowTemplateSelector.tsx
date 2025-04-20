@@ -30,7 +30,7 @@ import {
   ArrowRight
 } from "lucide-react";
 
-const API_BASE_URL = "http://localhost:8000";
+const API_BASE_URL = "https://keyveve-accounting-demo-backend.onrender.com";
 
 // Service types with their icons
 const SERVICE_TEMPLATES = [
