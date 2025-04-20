@@ -1,5 +1,8 @@
 "use client";
 
+import { Suspense } from "react";
+import { Loader2 } from "lucide-react";
+
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
 import axios from "axios";
@@ -17,17 +20,15 @@ import {
   Paperclip,
   User,
   Users,
-  Loader2,
   Clock,
-  FileText,
   RefreshCw,
-  BrainCircuit
+  BrainCircuit,
+  FileText
 } from "lucide-react";
 
-// API base URL
-const API_BASE_URL = "https://keyveve-accounting-demo-backend.onrender.co";
-
+// ─────────────────────────────────────────────────────────────────────────────
 // Interface definitions
+// ─────────────────────────────────────────────────────────────────────────────
 interface Message {
   id: string;
   project_id: number;
@@ -55,7 +56,13 @@ interface StaffMember {
   avatar_url?: string;
 }
 
-export default function ClientMessages() {
+// API base URL
+const API_BASE_URL = "https://keyveve-accounting-demo-backend.onrender.co";
+
+/* ────────────────────────────────────────────────────────────────────────────
+   Inner component (contains the original logic that calls useSearchParams)
+   ────────────────────────────────────────────────────────────────────────── */
+function StaffMessagesInner() {
   // Get project ID from URL query params
   const searchParams = useSearchParams();
   const projectId = parseInt(searchParams.get("project_id") || "1");
@@ -164,7 +171,7 @@ export default function ClientMessages() {
       } else {
         return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
       }
-    } catch (e) {
+    } catch {
       return "";
     }
   };
@@ -172,7 +179,7 @@ export default function ClientMessages() {
   // Get staff name by ID
   const getStaffName = (staffId: string | undefined) => {
     if (!staffId) return "Staff";
-    const staff = staffMembers.find(s => s.id === staffId);
+    const staff = staffMembers.find((s) => s.id === staffId);
     return staff ? staff.name : "Staff";
   };
 
@@ -186,13 +193,13 @@ export default function ClientMessages() {
     loadProject();
 
     // Set up polling for new messages
-    const intervalId = setInterval(loadProject, 30000); // Poll every 30 seconds
-
+    const intervalId = setInterval(loadProject, 30_000); // Poll every 30 seconds
     return () => clearInterval(intervalId);
   }, [projectId]);
 
   return (
     <div className="flex flex-col h-screen">
+      {/* ───────────────────────── HEADER ───────────────────────── */}
       <header className="border-b p-4 bg-background">
         <div className="container mx-auto flex items-center justify-between">
           <div className="flex items-center space-x-3">
@@ -212,7 +219,7 @@ export default function ClientMessages() {
                 {project && (
                   <div className="flex items-center">
                     <span className="text-sm font-normal text-muted-foreground">
-                      Project #{projectId} - {project.service_type}
+                      Project #{projectId} ‑ {project.service_type}
                     </span>
                   </div>
                 )}
@@ -232,6 +239,7 @@ export default function ClientMessages() {
         </div>
       </header>
 
+      {/* ───────────────────────── MAIN ───────────────────────── */}
       {loading && !project ? (
         <div className="flex-1 flex items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -241,6 +249,7 @@ export default function ClientMessages() {
           {/* Messages container */}
           <div className="flex-1 p-4 md:p-6 overflow-y-auto bg-muted/30">
             <div className="max-w-2xl mx-auto space-y-6">
+              {/* No messages */}
               {messages.length === 0 ? (
                 <div className="text-center py-12">
                   <MessageSquare className="h-12 w-12 mx-auto text-muted-foreground mb-3 opacity-50" />
@@ -250,30 +259,38 @@ export default function ClientMessages() {
                   </p>
                 </div>
               ) : (
+                /* Message list */
                 <>
                   {messages.map((message, index) => {
                     const isClient = message.sender === "client";
-                    const showDate = index === 0 ||
-                      (messages[index-1].timestamp && message.timestamp &&
-                       new Date(messages[index-1].timestamp).toDateString() !==
-                       new Date(message.timestamp).toDateString());
+                    const showDate =
+                      index === 0 ||
+                      (messages[index - 1].timestamp &&
+                        message.timestamp &&
+                        new Date(messages[index - 1].timestamp).toDateString() !==
+                          new Date(message.timestamp).toDateString());
 
                     return (
                       <div key={message.id}>
                         {showDate && message.timestamp && (
                           <div className="flex justify-center my-4">
                             <Badge variant="outline" className="bg-background">
-                              {new Date(message.timestamp).toLocaleDateString(undefined,
-                                { weekday: "long", month: "long", day: "numeric" })}
+                              {new Date(message.timestamp).toLocaleDateString(undefined, {
+                                weekday: "long",
+                                month: "long",
+                                day: "numeric"
+                              })}
                             </Badge>
                           </div>
                         )}
 
                         <div className={`flex ${isClient ? "justify-end" : "justify-start"}`}>
-                          <div className={`
+                          <div
+                            className={`
                             flex items-start space-x-2 max-w-[80%]
                             ${isClient ? "flex-row-reverse space-x-reverse" : ""}
-                          `}>
+                          `}
+                          >
                             <Avatar className="h-8 w-8 mt-1">
                               <AvatarFallback className={isClient ? "bg-primary/20" : "bg-muted"}>
                                 {isClient ? (
@@ -285,22 +302,28 @@ export default function ClientMessages() {
                             </Avatar>
 
                             <div>
-                              <div className={`
+                              <div
+                                className={`
                                 px-4 py-2.5 rounded-lg shadow-sm
-                                ${isClient 
-                                  ? "bg-primary text-primary-foreground" 
-                                  : "bg-background border"}
-                              `}>
+                                ${
+                                  isClient
+                                    ? "bg-primary text-primary-foreground"
+                                    : "bg-background border"
+                                }
+                              `}
+                              >
                                 <div className="text-xs text-muted-foreground mb-1">
                                   {isClient ? project?.client_name : getStaffName(message.sender_id)}
                                 </div>
                                 <p className="text-sm">{message.text}</p>
                               </div>
 
-                              <div className={`
+                              <div
+                                className={`
                                 mt-1 text-xs text-muted-foreground flex items-center
                                 ${isClient ? "justify-end" : ""}
-                              `}>
+                              `}
+                              >
                                 <Clock className="h-3 w-3 mr-1" />
                                 <span>{formatRelativeTime(message.timestamp)}</span>
                               </div>
@@ -344,7 +367,11 @@ export default function ClientMessages() {
                   disabled={sendingMessage || !newMessage.trim()}
                   size="icon"
                 >
-                  {sendingMessage ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  {sendingMessage ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}
                 </Button>
               </div>
 
@@ -354,9 +381,9 @@ export default function ClientMessages() {
                   Need immediate assistance? You can also reach us by:
                 </p>
                 <ul className="mt-2 space-y-1 text-muted-foreground">
-                  <li>• Phone: (555) 123-4567</li>
+                  <li>• Phone: (555) 123‑4567</li>
                   <li>• Email: support@keyveve.com</li>
-                  <li>• Hours: Monday-Friday, 9am-5pm</li>
+                  <li>• Hours: Monday‑Friday, 9:am‑5:pm</li>
                 </ul>
               </div>
             </div>
@@ -364,5 +391,22 @@ export default function ClientMessages() {
         </div>
       )}
     </div>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+   Route wrapper with Suspense (required by Next.js when using useSearchParams)
+   ────────────────────────────────────────────────────────────────────────── */
+export default function StaffMessagesPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex h-screen items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      }
+    >
+      <StaffMessagesInner />
+    </Suspense>
   );
 }
