@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 
 // API base URL
-const API_BASE_URL = "https://keyveve-accounting-demo-backend.onrender.com";
+const API_BASE_URL = "https://keyveve-accounting-demo-backend.onrender.co";
 
 // Interface definitions
 interface Message {
