@@ -1,5 +1,7 @@
 "use client";
 
+import { Suspense } from "react";
+import { Loader2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import axios from "axios";
@@ -8,7 +10,7 @@ import EnhancedPricingCalculation from "@/components/enhancedpricingcalculation"
 
 const API_BASE_URL = "https://keyveve-accounting-demo-backend.onrender.com";
 
-export default function PricingPage() {
+function PricingPageInner() {
   const searchParams = useSearchParams();
   const [project, setProject] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -56,7 +58,9 @@ export default function PricingPage() {
     return (
       <div className="p-6 text-center">
         <p className="text-red-500 mb-4">{error}</p>
-        <p>Please ensure the URL contains a valid <code>?project_id=XYZ</code>.</p>
+        <p>
+          Please ensure the URL contains a valid <code>?project_id=XYZ</code>.
+        </p>
       </div>
     );
   }
@@ -85,5 +89,14 @@ export default function PricingPage() {
         }}
       />
     </div>
+  );
+}
+
+// Wrap the inner component in a Suspense boundary
+export default function PricingPage() {
+  return (
+    <Suspense fallback={<Loader2 className="h-8 w-8 animate-spin m-auto" />}>
+      <PricingPageInner />
+    </Suspense>
   );
 }

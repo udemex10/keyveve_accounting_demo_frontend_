@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useState, useEffect } from "react";
 import axios from "axios";
@@ -52,7 +53,6 @@ import {
   Eye,
   Check,
   UserCheck,
-  Users
 } from "lucide-react";
 
 // API base URL
@@ -89,31 +89,31 @@ const SERVICE_FEES: ServiceFee[] = [
   {
     service: "Tax Return",
     basePrice: 500,
-    description: "Individual tax return preparation and filing"
+    description: "Individual tax return preparation and filing",
   },
   {
     service: "Bookkeeping",
     basePrice: 750,
-    description: "Monthly bookkeeping and reconciliation services"
+    description: "Monthly bookkeeping and reconciliation services",
   },
   {
     service: "Audit",
     basePrice: 2500,
-    description: "Comprehensive audit and financial statement review"
+    description: "Comprehensive audit and financial statement review",
   },
   {
     service: "Financial Planning",
     basePrice: 1200,
-    description: "Personal or business financial planning services"
+    description: "Personal or business financial planning services",
   },
   {
     service: "Advisory",
     basePrice: 1000,
-    description: "Business advisory services"
-  }
+    description: "Business advisory services",
+  },
 ];
 
-export default function EngagementLetterPage() {
+function EngagementLetterInner() {
   // Get project ID from URL query params
   const searchParams = useSearchParams();
   const projectId = parseInt(searchParams.get("project_id") || "1");
@@ -129,7 +129,7 @@ export default function EngagementLetterPage() {
     scope: true,
     fee: true,
     timeline: true,
-    confidentiality: true
+    confidentiality: true,
   });
 
   // New state hooks for enhanced functionality
@@ -151,27 +151,27 @@ export default function EngagementLetterPage() {
       return SERVICE_FEES[0]; // Default to first service
     }
 
-    const fee = SERVICE_FEES.find(fee => fee.service === project.service_type);
+    const fee = SERVICE_FEES.find((fee) => fee.service === project.service_type);
     return fee || SERVICE_FEES[0];
   };
 
   // Format currency
   const formatCurrency = (value: number | string) => {
-    const numValue = typeof value === 'string' ? parseFloat(value) : value;
-    if (isNaN(numValue)) return '$0.00';
+    const numValue = typeof value === "string" ? parseFloat(value) : value;
+    if (isNaN(numValue)) return "$0.00";
 
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
     }).format(numValue);
   };
 
   // Format date
   const formatDate = (date: Date) => {
-    return new Intl.DateTimeFormat('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
+    return new Intl.DateTimeFormat("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
     }).format(date);
   };
 
@@ -188,11 +188,12 @@ export default function EngagementLetterPage() {
     setGenerating(true);
     try {
       // Simulate letter generation
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise((resolve) => setTimeout(resolve, 2000));
 
       toast({
         title: "Letter Generated",
-        description: "Local engagement letter has been generated for demonstration purposes.",
+        description:
+          "Local engagement letter has been generated for demonstration purposes.",
       });
 
       setGenerateDialogOpen(false);
@@ -201,7 +202,8 @@ export default function EngagementLetterPage() {
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Could not generate local engagement letter. Please try again.",
+        description:
+          "Could not generate local engagement letter. Please try again.",
       });
     } finally {
       setGenerating(false);
@@ -214,7 +216,7 @@ export default function EngagementLetterPage() {
 
     try {
       // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, 1000));
 
       // Pretend we got pricing data
       setCustomFee("1200");
@@ -246,19 +248,22 @@ export default function EngagementLetterPage() {
     setExportingCSV(true);
     try {
       // Simulate export process
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      await new Promise((resolve) => setTimeout(resolve, 1500));
 
       // Create CSV content
       const csvContent = `"client_name","project_id","service_type","fee","status"
 "${project.client_name}","${project.id}","${project.service_type}","${customFee}","${project.status}"`;
 
       // Create blob and download
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
       const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.setAttribute('href', url);
-      link.setAttribute('download', `engagement_letter_data_${project.id}.csv`);
-      link.style.visibility = 'hidden';
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute(
+        "download",
+        `engagement_letter_data_${project.id}.csv`
+      );
+      link.style.visibility = "hidden";
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -285,7 +290,7 @@ export default function EngagementLetterPage() {
   const checkStatus = async () => {
     try {
       // Simulate checking status from external software
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, 1000));
 
       // For the demo, just cycle through statuses
       if (currentStatus === "pending") setCurrentStatus("sent");
@@ -315,11 +320,12 @@ export default function EngagementLetterPage() {
       setProject(response.data);
 
       // Set custom fee based on service type
-      const fee = SERVICE_FEES.find(fee => fee.service === response.data.service_type);
+      const fee = SERVICE_FEES.find(
+        (fee) => fee.service === response.data.service_type
+      );
       if (fee) {
         setCustomFee(fee.basePrice.toString());
       }
-
     } catch (error) {
       console.error("Error loading project:", error);
       toast({
@@ -340,18 +346,21 @@ export default function EngagementLetterPage() {
       toast({
         variant: "destructive",
         title: "Terms Required",
-        description: "Please confirm all engagement letter terms before sending.",
+        description:
+          "Please confirm all engagement letter terms before sending.",
       });
       return;
     }
 
     setSendingLetter(true);
     try {
-      const response = await axios.post(`${API_BASE_URL}/integrations/engagement-letter`, {
-        project_id: project.id
+      await axios.post(`${API_BASE_URL}/integrations/engagement-letter`, {
+        project_id: project.id,
       });
 
-      setMessage("Client data sent to engagement letter software. Project status updated to 'Awaiting Signature'.");
+      setMessage(
+        "Client data sent to engagement letter software. Project status updated to 'Awaiting Signature'."
+      );
 
       toast({
         title: "Data Sent",
@@ -364,7 +373,8 @@ export default function EngagementLetterPage() {
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Could not send data to engagement letter software. Please try again.",
+        description:
+          "Could not send data to engagement letter software. Please try again.",
       });
     } finally {
       setSendingLetter(false);
@@ -418,16 +428,20 @@ export default function EngagementLetterPage() {
                 <Card className="bg-muted/30 border">
                   <CardContent className="pt-6 pb-4">
                     <div className="flex items-start space-x-4">
-                      <div className={`p-3 rounded-full ${
-                        project.status === "Awaiting Signature" 
-                          ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" 
-                          : project.status === "Project Started" || project.status === "Completed"
+                      <div
+                        className={`p-3 rounded-full ${
+                          project.status === "Awaiting Signature"
+                            ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                            : project.status === "Project Started" ||
+                              project.status === "Completed"
                             ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
                             : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
-                      }`}>
+                        }`}
+                      >
                         {project.status === "Awaiting Signature" ? (
                           <Clock className="h-6 w-6" />
-                        ) : project.status === "Project Started" || project.status === "Completed" ? (
+                        ) : project.status === "Project Started" ||
+                          project.status === "Completed" ? (
                           <UserCheck className="h-6 w-6" />
                         ) : (
                           <ExternalLink className="h-6 w-6" />
@@ -437,32 +451,45 @@ export default function EngagementLetterPage() {
                         <h3 className="font-medium text-lg">
                           {project.status === "Awaiting Signature"
                             ? "Awaiting Client Signature"
-                            : project.status === "Project Started" || project.status === "Completed"
-                              ? "Engagement Letter Signed"
-                              : "Ready to Send Client Data"}
+                            : project.status === "Project Started" ||
+                              project.status === "Completed"
+                            ? "Engagement Letter Signed"
+                            : "Ready to Send Client Data"}
                         </h3>
                         <p className="text-muted-foreground">
                           {project.status === "Awaiting Signature"
                             ? "Client data has been sent to the external system and is awaiting client signature."
-                            : project.status === "Project Started" || project.status === "Completed"
-                              ? "The client has signed the engagement letter and the project is now active."
-                              : "Client data is ready to be sent to the external engagement letter software."}
+                            : project.status === "Project Started" ||
+                              project.status === "Completed"
+                            ? "The client has signed the engagement letter and the project is now active."
+                            : "Client data is ready to be sent to the external engagement letter software."}
                         </p>
 
                         {project.status === "Awaiting Signature" && (
                           <div className="flex items-center mt-2 space-x-2">
-                            <Button variant="outline" size="sm" className="gap-2" onClick={checkStatus}>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="gap-2"
+                              onClick={checkStatus}
+                            >
                               <RefreshCw className="h-3 w-3" />
                               Check Status
                             </Button>
-                            <Button variant="ghost" size="sm" className="gap-2" onClick={() => setDetailsDialogOpen(true)}>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="gap-2"
+                              onClick={() => setDetailsDialogOpen(true)}
+                            >
                               <Eye className="h-3 w-3" />
                               View Details
                             </Button>
                           </div>
                         )}
 
-                        {(project.status === "Project Started" || project.status === "Completed") && (
+                        {(project.status === "Project Started" ||
+                          project.status === "Completed") && (
                           <div className="flex items-center mt-2 space-x-2">
                             <Button
                               variant="outline"
@@ -476,28 +503,30 @@ export default function EngagementLetterPage() {
                           </div>
                         )}
 
-                        {(project.status !== "Awaiting Signature" && project.status !== "Project Started" && project.status !== "Completed") && (
-                          <div className="flex items-center mt-2 space-x-2">
-                            <Button
-                              onClick={sendEngagementLetter}
-                              disabled={sendingLetter}
-                              size="sm"
-                              className="gap-2"
-                            >
-                              {sendingLetter ? (
-                                <>
-                                  <Loader2 className="h-3 w-3 animate-spin" />
-                                  Sending...
-                                </>
-                              ) : (
-                                <>
-                                  <ExternalLink className="h-3 w-3" />
-                                  Send to EngagementLetterApp
-                                </>
-                              )}
-                            </Button>
-                          </div>
-                        )}
+                        {project.status !== "Awaiting Signature" &&
+                          project.status !== "Project Started" &&
+                          project.status !== "Completed" && (
+                            <div className="flex items-center mt-2 space-x-2">
+                              <Button
+                                onClick={sendEngagementLetter}
+                                disabled={sendingLetter}
+                                size="sm"
+                                className="gap-2"
+                              >
+                                {sendingLetter ? (
+                                  <>
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                    Sending...
+                                  </>
+                                ) : (
+                                  <>
+                                    <ExternalLink className="h-3 w-3" />
+                                    Send to EngagementLetterApp
+                                  </>
+                                )}
+                              </Button>
+                            </div>
+                          )}
                       </div>
                     </div>
                   </CardContent>
@@ -506,7 +535,9 @@ export default function EngagementLetterPage() {
                 {/* Status Timeline for "Awaiting Signature" */}
                 {project.status === "Awaiting Signature" && (
                   <div className="space-y-3">
-                    <h3 className="text-sm font-medium">External Software Status Timeline</h3>
+                    <h3 className="text-sm font-medium">
+                      External Software Status Timeline
+                    </h3>
                     <div className="relative">
                       <div className="absolute left-4 top-0 bottom-0 w-[1px] bg-muted-foreground/20"></div>
 
@@ -518,35 +549,69 @@ export default function EngagementLetterPage() {
                           <div>
                             <p className="font-medium">Data Sent to Software</p>
                             <p className="text-xs text-muted-foreground">
-                              {project.updated_at ? new Date(project.updated_at).toLocaleDateString() : "unknown date"}
+                              {project.updated_at
+                                ? new Date(project.updated_at).toLocaleDateString()
+                                : "unknown date"}
                             </p>
                           </div>
                         </div>
 
                         <div className="relative">
-                          <div className={`absolute -left-10 mt-0.5 h-4 w-4 rounded-full border ${currentStatus === "viewed" || currentStatus === "signed" ? "border-primary" : "border-muted-foreground/40"} bg-background flex items-center justify-center`}>
-                            {(currentStatus === "viewed" || currentStatus === "signed") && (
+                          <div
+                            className={`absolute -left-10 mt-0.5 h-4 w-4 rounded-full border ${
+                              currentStatus === "viewed" ||
+                              currentStatus === "signed"
+                                ? "border-primary"
+                                : "border-muted-foreground/40"
+                            } bg-background flex items-center justify-center`}
+                          >
+                            {(currentStatus === "viewed" ||
+                              currentStatus === "signed") && (
                               <div className="h-2 w-2 rounded-full bg-primary"></div>
                             )}
                           </div>
-                          <div className={currentStatus === "viewed" || currentStatus === "signed" ? "" : "text-muted-foreground/60"}>
+                          <div
+                            className={
+                              currentStatus === "viewed" ||
+                              currentStatus === "signed"
+                                ? ""
+                                : "text-muted-foreground/60"
+                            }
+                          >
                             <p className="font-medium">Viewed by Client</p>
                             <p className="text-xs text-muted-foreground">
-                              {(currentStatus === "viewed" || currentStatus === "signed") ? "April 14, 2025" : "Pending"}
+                              {currentStatus === "viewed" ||
+                              currentStatus === "signed"
+                                ? "April 14, 2025"
+                                : "Pending"}
                             </p>
                           </div>
                         </div>
 
                         <div className="relative">
-                          <div className={`absolute -left-10 mt-0.5 h-4 w-4 rounded-full border ${currentStatus === "signed" ? "border-primary" : "border-muted-foreground/40"} bg-background flex items-center justify-center`}>
+                          <div
+                            className={`absolute -left-10 mt-0.5 h-4 w-4 rounded-full border ${
+                              currentStatus === "signed"
+                                ? "border-primary"
+                                : "border-muted-foreground/40"
+                            } bg-background flex items-center justify-center`}
+                          >
                             {currentStatus === "signed" && (
                               <div className="h-2 w-2 rounded-full bg-primary"></div>
                             )}
                           </div>
-                          <div className={currentStatus === "signed" ? "" : "text-muted-foreground/60"}>
+                          <div
+                            className={
+                              currentStatus === "signed"
+                                ? ""
+                                : "text-muted-foreground/60"
+                            }
+                          >
                             <p className="font-medium">Signed by Client</p>
                             <p className="text-xs text-muted-foreground">
-                              {currentStatus === "signed" ? "April 15, 2025" : "Pending"}
+                              {currentStatus === "signed"
+                                ? "April 15, 2025"
+                                : "Pending"}
                             </p>
                           </div>
                         </div>
@@ -556,54 +621,75 @@ export default function EngagementLetterPage() {
                 )}
 
                 {/* Signature history for "Project Started" or "Completed" */}
-                {showSignatureHistory && (project.status === "Project Started" || project.status === "Completed") && (
-                  <div className="space-y-4">
-                    <div className="flex justify-between items-center">
-                      <h3 className="text-sm font-medium">Signature History</h3>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setShowSignatureHistory(false)}
-                        className="h-7 text-xs"
-                      >
-                        Hide
-                      </Button>
+                {showSignatureHistory &&
+                  (project.status === "Project Started" ||
+                    project.status === "Completed") && (
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-center">
+                        <h3 className="text-sm font-medium">
+                          Signature History
+                        </h3>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setShowSignatureHistory(false)}
+                          className="h-7 text-xs"
+                        >
+                          Hide
+                        </Button>
+                      </div>
+
+                      <div className="rounded-lg border p-4 space-y-3">
+                        <div className="flex items-start space-x-3">
+                          <CheckCircle className="h-5 w-5 text-green-500 mt-0.5" />
+                          <div>
+                            <p className="font-medium">
+                              Data Sent to EngagementLetterApp
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              April 10, 2025 at 2:45 PM
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start space-x-3">
+                          <CheckCircle className="h-5 w-5 text-green-500 mt-0.5" />
+                          <div>
+                            <p className="font-medium">Opened by Client</p>
+                            <p className="text-xs text-muted-foreground">
+                              April 12, 2025 at 9:30 AM
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start space-x-3">
+                          <CheckCircle className="h-5 w-5 text-green-500 mt-0.5" />
+                          <div>
+                            <p className="font-medium">Signed by Client</p>
+                            <p className="text-xs text-muted-foreground">
+                              April 12, 2025 at 10:15 AM
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              IP: 192.168.1.1 | Device: Chrome on Windows
+                            </p>
+                          </div>
+                        </div>
+                      </div>
                     </div>
-
-                    <div className="rounded-lg border p-4 space-y-3">
-                      <div className="flex items-start space-x-3">
-                        <CheckCircle className="h-5 w-5 text-green-500 mt-0.5" />
-                        <div>
-                          <p className="font-medium">Data Sent to EngagementLetterApp</p>
-                          <p className="text-xs text-muted-foreground">April 10, 2025 at 2:45 PM</p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-start space-x-3">
-                        <CheckCircle className="h-5 w-5 text-green-500 mt-0.5" />
-                        <div>
-                          <p className="font-medium">Opened by Client</p>
-                          <p className="text-xs text-muted-foreground">April 12, 2025 at 9:30 AM</p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-start space-x-3">
-                        <CheckCircle className="h-5 w-5 text-green-500 mt-0.5" />
-                        <div>
-                          <p className="font-medium">Signed by Client</p>
-                          <p className="text-xs text-muted-foreground">April 12, 2025 at 10:15 AM</p>
-                          <p className="text-xs text-muted-foreground mt-1">IP: 192.168.1.1 | Device: Chrome on Windows</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
+                  )}
 
                 {/* Client Data Preview section - replaces the letter content preview */}
                 <div className="space-y-2">
                   <div className="flex justify-between items-center">
-                    <h3 className="text-sm font-medium">Client Data Sent to Engagement Letter Software</h3>
-                    <Button variant="outline" size="sm" onClick={() => setExportDialogOpen(true)} className="gap-2">
+                    <h3 className="text-sm font-medium">
+                      Client Data Sent to Engagement Letter Software
+                    </h3>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setExportDialogOpen(true)}
+                      className="gap-2"
+                    >
                       <Download className="h-3 w-3" />
                       Export Data
                     </Button>
@@ -615,9 +701,12 @@ export default function EngagementLetterPage() {
                         <ExternalLink className="h-5 w-5 text-primary" />
                       </div>
                       <div>
-                        <h3 className="font-medium">Integration with EngagementLetterApp</h3>
+                        <h3 className="font-medium">
+                          Integration with EngagementLetterApp
+                        </h3>
                         <p className="text-xs text-muted-foreground">
-                          The following data will be sent to the external engagement letter software
+                          The following data will be sent to the external
+                          engagement letter software
                         </p>
                       </div>
                     </div>
@@ -625,31 +714,53 @@ export default function EngagementLetterPage() {
                     <div className="grid gap-4">
                       {/* Client Information Section */}
                       <div className="space-y-2">
-                        <h4 className="text-sm font-medium text-muted-foreground">Client Information</h4>
+                        <h4 className="text-sm font-medium text-muted-foreground">
+                          Client Information
+                        </h4>
                         <div className="grid grid-cols-2 gap-2 border rounded-md p-3 bg-muted/20">
                           <div>
-                            <p className="text-xs text-muted-foreground mb-1">Client Name</p>
-                            <p className="text-sm font-medium">{project.client_name}</p>
+                            <p className="text-xs text-muted-foreground mb-1">
+                              Client Name
+                            </p>
+                            <p className="text-sm font-medium">
+                              {project.client_name}
+                            </p>
                           </div>
                           <div>
-                            <p className="text-xs text-muted-foreground mb-1">Project ID</p>
-                            <p className="text-sm font-medium">#{project.id}</p>
+                            <p className="text-xs text-muted-foreground mb-1">
+                              Project ID
+                            </p>
+                            <p className="text-sm font-medium">
+                              #{project.id}
+                            </p>
                           </div>
                         </div>
                       </div>
 
                       {/* Service & Fee Information */}
                       <div className="space-y-2">
-                        <h4 className="text-sm font-medium text-muted-foreground">Service & Fee Information</h4>
+                        <h4 className="text-sm font-medium text-muted-foreground">
+                          Service & Fee Information
+                        </h4>
                         <div className="border rounded-md p-3 bg-muted/20">
                           <div className="grid grid-cols-2 gap-2 mb-3">
                             <div>
-                              <p className="text-xs text-muted-foreground mb-1">Service Type</p>
-                              <p className="text-sm font-medium">{project.service_type}</p>
+                              <p className="text-xs text-muted-foreground mb-1">
+                                Service Type
+                              </p>
+                              <p className="text-sm font-medium">
+                                {project.service_type}
+                              </p>
                             </div>
                             <div>
-                              <p className="text-xs text-muted-foreground mb-1">Service Fee</p>
-                              <p className="text-sm font-medium">{formatCurrency(customFee || getServiceFee().basePrice)}</p>
+                              <p className="text-xs text-muted-foreground mb-1">
+                                Service Fee
+                              </p>
+                              <p className="text-sm font-medium">
+                                {formatCurrency(
+                                  customFee || getServiceFee().basePrice
+                                )}
+                              </p>
                               {showFetchedFromPricing && (
                                 <div className="rounded-md bg-green-50 dark:bg-green-900/20 p-1 mt-1 text-xs text-green-700 dark:text-green-300 animate-pulse">
                                   <div className="flex items-center">
@@ -661,32 +772,43 @@ export default function EngagementLetterPage() {
                             </div>
                           </div>
                           <div>
-                            <p className="text-xs text-muted-foreground mb-1">Service Description</p>
-                            <p className="text-sm">{getServiceFee().description}</p>
+                            <p className="text-xs text-muted-foreground mb-1">
+                              Service Description
+                            </p>
+                            <p className="text-sm">
+                              {getServiceFee().description}
+                            </p>
                           </div>
                         </div>
                       </div>
 
                       {/* Document Summary */}
                       <div className="space-y-2">
-                        <h4 className="text-sm font-medium text-muted-foreground">Document Summary</h4>
+                        <h4 className="text-sm font-medium text-muted-foreground">
+                          Document Summary
+                        </h4>
                         <div className="border rounded-md p-3 bg-muted/20">
                           <p className="text-xs text-muted-foreground mb-2">
-                            {project.docs.length} document{project.docs.length !== 1 ? 's' : ''} associated with this project
+                            {project.docs.length} document
+                            {project.docs.length !== 1 ? "s" : ""} associated
+                            with this project
                           </p>
                           <div className="flex flex-wrap gap-1">
                             {/* Count by document type */}
                             {(() => {
-                              const docTypes = {};
-                              project.docs.forEach(doc => {
-                                docTypes[doc.doc_type] = (docTypes[doc.doc_type] || 0) + 1;
+                              const docTypes: Record<string, number> = {};
+                              project.docs.forEach((doc) => {
+                                docTypes[doc.doc_type] =
+                                  (docTypes[doc.doc_type] || 0) + 1;
                               });
 
-                              return Object.entries(docTypes).map(([type, count]) => (
-                                <Badge key={type} variant="outline" className="text-xs">
-                                  {type}: {count}
-                                </Badge>
-                              ));
+                              return Object.entries(docTypes).map(
+                                ([type, count]) => (
+                                  <Badge key={type} variant="outline" className="text-xs">
+                                    {type}: {count}
+                                  </Badge>
+                                )
+                              );
                             })()}
                           </div>
                         </div>
@@ -694,16 +816,26 @@ export default function EngagementLetterPage() {
 
                       {/* Timeline Information */}
                       <div className="space-y-2">
-                        <h4 className="text-sm font-medium text-muted-foreground">Timeline Information</h4>
+                        <h4 className="text-sm font-medium text-muted-foreground">
+                          Timeline Information
+                        </h4>
                         <div className="border rounded-md p-3 bg-muted/20">
                           <div className="grid grid-cols-2 gap-2">
                             <div>
-                              <p className="text-xs text-muted-foreground mb-1">Engagement Date</p>
-                              <p className="text-sm font-medium">{formatDate(new Date())}</p>
+                              <p className="text-xs text-muted-foreground mb-1">
+                                Engagement Date
+                              </p>
+                              <p className="text-sm font-medium">
+                                {formatDate(new Date())}
+                              </p>
                             </div>
                             <div>
-                              <p className="text-xs text-muted-foreground mb-1">Estimated Completion</p>
-                              <p className="text-sm font-medium">{getEstimatedCompletionDate()}</p>
+                              <p className="text-xs text-muted-foreground mb-1">
+                                Estimated Completion
+                              </p>
+                              <p className="text-sm font-medium">
+                                {getEstimatedCompletionDate()}
+                              </p>
                             </div>
                           </div>
                         </div>
@@ -712,7 +844,9 @@ export default function EngagementLetterPage() {
                       {/* Additional Notes */}
                       {additionalNotes && (
                         <div className="space-y-2">
-                          <h4 className="text-sm font-medium text-muted-foreground">Additional Notes</h4>
+                          <h4 className="text-sm font-medium text-muted-foreground">
+                            Additional Notes
+                          </h4>
                           <div className="border rounded-md p-3 bg-muted/20">
                             <p className="text-sm">{additionalNotes}</p>
                           </div>
@@ -727,8 +861,10 @@ export default function EngagementLetterPage() {
                         </div>
                         <div>
                           <p className="text-xs text-amber-800 dark:text-amber-200">
-                            This data will be used by the external engagement letter software to generate an engagement letter.
-                            The actual letter content and formatting will be determined by the external software's templates.
+                            This data will be used by the external engagement
+                            letter software to generate an engagement letter.
+                            The actual letter content and formatting will be
+                            determined by the external software's templates.
                           </p>
                         </div>
                       </div>
@@ -738,94 +874,109 @@ export default function EngagementLetterPage() {
 
                 {/* Confirmation checkbox section */}
                 {project.status !== "Awaiting Signature" &&
-                 project.status !== "Project Started" &&
-                 project.status !== "Completed" && (
-                  <div className="space-y-3 rounded-lg border p-4">
-                    <h3 className="text-sm font-medium">Confirm Before Sending</h3>
-                    <div className="space-y-2">
-                      <div className="flex items-center space-x-2">
-                        <Checkbox
-                          id="scope"
-                          checked={termsChecked.scope}
-                          onCheckedChange={(checked) =>
-                            setTermsChecked({...termsChecked, scope: checked as boolean})
-                          }
-                        />
-                        <label
-                          htmlFor="scope"
-                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                        >
-                          Client scope of services is clearly defined
-                        </label>
+                  project.status !== "Project Started" &&
+                  project.status !== "Completed" && (
+                    <div className="space-y-3 rounded-lg border p-4">
+                      <h3 className="text-sm font-medium">Confirm Before Sending</h3>
+                      <div className="space-y-2">
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id="scope"
+                            checked={termsChecked.scope}
+                            onCheckedChange={(checked) =>
+                              setTermsChecked({
+                                ...termsChecked,
+                                scope: checked as boolean,
+                              })
+                            }
+                          />
+                          <label
+                            htmlFor="scope"
+                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                          >
+                            Client scope of services is clearly defined
+                          </label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id="fee"
+                            checked={termsChecked.fee}
+                            onCheckedChange={(checked) =>
+                              setTermsChecked({
+                                ...termsChecked,
+                                fee: checked as boolean,
+                              })
+                            }
+                          />
+                          <label
+                            htmlFor="fee"
+                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                          >
+                            Fee structure is appropriate for this engagement
+                          </label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id="timeline"
+                            checked={termsChecked.timeline}
+                            onCheckedChange={(checked) =>
+                              setTermsChecked({
+                                ...termsChecked,
+                                timeline: checked as boolean,
+                              })
+                            }
+                          />
+                          <label
+                            htmlFor="timeline"
+                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                          >
+                            Timeline and expectations are realistic
+                          </label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id="confidentiality"
+                            checked={termsChecked.confidentiality}
+                            onCheckedChange={(checked) =>
+                              setTermsChecked({
+                                ...termsChecked,
+                                confidentiality: checked as boolean,
+                              })
+                            }
+                          />
+                          <label
+                            htmlFor="confidentiality"
+                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                          >
+                            Confidentiality terms will be included
+                          </label>
+                        </div>
                       </div>
-                      <div className="flex items-center space-x-2">
-                        <Checkbox
-                          id="fee"
-                          checked={termsChecked.fee}
-                          onCheckedChange={(checked) =>
-                            setTermsChecked({...termsChecked, fee: checked as boolean})
-                          }
-                        />
-                        <label
-                          htmlFor="fee"
-                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                        >
-                          Fee structure is appropriate for this engagement
-                        </label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Checkbox
-                          id="timeline"
-                          checked={termsChecked.timeline}
-                          onCheckedChange={(checked) =>
-                            setTermsChecked({...termsChecked, timeline: checked as boolean})
-                          }
-                        />
-                        <label
-                          htmlFor="timeline"
-                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                        >
-                          Timeline and expectations are realistic
-                        </label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Checkbox
-                          id="confidentiality"
-                          checked={termsChecked.confidentiality}
-                          onCheckedChange={(checked) =>
-                            setTermsChecked({...termsChecked, confidentiality: checked as boolean})
-                          }
-                        />
-                        <label
-                          htmlFor="confidentiality"
-                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                        >
-                          Confidentiality terms will be included
-                        </label>
-                      </div>
-                    </div>
 
-                    <div className="pt-2 flex justify-end">
-                      <Button
-                        onClick={sendEngagementLetter}
-                        disabled={sendingLetter || !Object.values(termsChecked).every(Boolean)}
-                        className="gap-2"
-                      >
-                        {sendingLetter ? (
-                          <>
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            Sending...
-                          </>
-                        ) : (
-                          <>
-                            <ExternalLink className="h-4 w-4" />
-                            Send to EngagementLetterApp
-                          </>
-                        )}
-                      </Button>
+                      <div className="pt-2 flex justify-end">
+                        <Button
+                          onClick={sendEngagementLetter}
+                          disabled={
+                            sendingLetter ||
+                            !Object.values(termsChecked).every(Boolean)
+                          }
+                          className="gap-2"
+                        >
+                          {sendingLetter ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              Sending...
+                            </>
+                          ) : (
+                            <>
+                              <ExternalLink className="h-4 w-4" />
+                              Send to EngagementLetterApp
+                            </>
+                          )}
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
                 {message && (
                   <div className="rounded-lg border border-green-200 bg-green-50 dark:bg-green-900/20 p-4 text-green-700 dark:text-green-300 text-sm">
@@ -857,7 +1008,9 @@ export default function EngagementLetterPage() {
                         <FileText className="h-4 w-4 text-primary flex-shrink-0" />
                         <div className="flex-1 min-w-0">
                           <p className="truncate">{doc.original_name}</p>
-                          <p className="text-xs text-muted-foreground">{doc.doc_type}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {doc.doc_type}
+                          </p>
                         </div>
                       </div>
                     ))}
@@ -904,12 +1057,15 @@ export default function EngagementLetterPage() {
                     <DialogHeader>
                       <DialogTitle>Export to CSV</DialogTitle>
                       <DialogDescription>
-                        Export client data to CSV format for importing into other engagement letter systems.
+                        Export client data to CSV format for importing into
+                        other engagement letter systems.
                       </DialogDescription>
                     </DialogHeader>
                     <div className="py-4">
                       <div className="rounded-lg border p-4">
-                        <h4 className="text-sm font-medium mb-2">Export will include:</h4>
+                        <h4 className="text-sm font-medium mb-2">
+                          Export will include:
+                        </h4>
                         <ul className="text-sm space-y-1">
                           <li className="flex items-center">
                             <Check className="h-4 w-4 text-green-500 mr-2" />
@@ -934,10 +1090,7 @@ export default function EngagementLetterPage() {
                       <Button variant="outline" onClick={() => setExportDialogOpen(false)}>
                         Cancel
                       </Button>
-                      <Button
-                        onClick={exportToCSV}
-                        disabled={exportingCSV}
-                      >
+                      <Button onClick={exportToCSV} disabled={exportingCSV}>
                         {exportingCSV ? (
                           <>
                             <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -986,8 +1139,9 @@ export default function EngagementLetterPage() {
                     <div>
                       <p className="font-medium">For demonstration purposes</p>
                       <p className="mt-1">
-                        This feature allows you to preview a locally generated engagement letter
-                        for demonstration and feedback purposes only.
+                        This feature allows you to preview a locally generated
+                        engagement letter for demonstration and feedback purposes
+                        only.
                       </p>
                     </div>
                   </div>
@@ -1004,12 +1158,15 @@ export default function EngagementLetterPage() {
                     <DialogHeader>
                       <DialogTitle>Generate Local Engagement Letter</DialogTitle>
                       <DialogDescription>
-                        This is for demonstration purposes only and does not replace the integrated workflow.
+                        This is for demonstration purposes only and does not
+                        replace the integrated workflow.
                       </DialogDescription>
                     </DialogHeader>
                     <div className="py-4">
                       <div className="rounded-lg border p-4">
-                        <h4 className="text-sm font-medium mb-2">Demo letter will include:</h4>
+                        <h4 className="text-sm font-medium mb-2">
+                          Demo letter will include:
+                        </h4>
                         <ul className="text-sm space-y-1">
                           <li className="flex items-center">
                             <Check className="h-4 w-4 text-green-500 mr-2" />
@@ -1021,7 +1178,8 @@ export default function EngagementLetterPage() {
                           </li>
                           <li className="flex items-center">
                             <Check className="h-4 w-4 text-green-500 mr-2" />
-                            Fee structure: {formatCurrency(customFee || getServiceFee().basePrice)}
+                            Fee structure:{" "}
+                            {formatCurrency(customFee || getServiceFee().basePrice)}
                           </li>
                           <li className="flex items-center">
                             <Check className="h-4 w-4 text-green-500 mr-2" />
@@ -1031,13 +1189,13 @@ export default function EngagementLetterPage() {
                       </div>
                     </div>
                     <DialogFooter>
-                      <Button variant="outline" onClick={() => setGenerateDialogOpen(false)}>
+                      <Button
+                        variant="outline"
+                        onClick={() => setGenerateDialogOpen(false)}
+                      >
                         Cancel
                       </Button>
-                      <Button
-                        onClick={generateEngagementLetter}
-                        disabled={generating}
-                      >
+                      <Button onClick={generateEngagementLetter} disabled={generating}>
                         {generating ? (
                           <>
                             <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -1074,13 +1232,16 @@ export default function EngagementLetterPage() {
                     {SERVICE_FEES.map((fee) => (
                       <TableRow key={fee.service}>
                         <TableCell>{fee.service}</TableCell>
-                        <TableCell className="text-right">{formatCurrency(fee.basePrice)}</TableCell>
+                        <TableCell className="text-right">
+                          {formatCurrency(fee.basePrice)}
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
                 <p className="text-xs text-muted-foreground mt-2">
-                  Note: Actual pricing may vary based on client-specific factors and complexity.
+                  Note: Actual pricing may vary based on client-specific factors
+                  and complexity.
                 </p>
               </CardContent>
             </Card>
@@ -1106,24 +1267,36 @@ export default function EngagementLetterPage() {
           <div className="space-y-4 py-4">
             <div className="space-y-1">
               <p className="text-sm font-medium">Current Status:</p>
-              <p className="text-sm">{currentStatus === "pending" ? "Awaiting Client View" :
-                currentStatus === "sent" ? "Delivered to Client" :
-                currentStatus === "viewed" ? "Viewed by Client" :
-                "Signed by Client"}</p>
+              <p className="text-sm">
+                {currentStatus === "pending"
+                  ? "Awaiting Client View"
+                  : currentStatus === "sent"
+                  ? "Delivered to Client"
+                  : currentStatus === "viewed"
+                  ? "Viewed by Client"
+                  : "Signed by Client"}
+              </p>
             </div>
 
             <div className="space-y-1">
               <p className="text-sm font-medium">Data Sent Date:</p>
-              <p className="text-sm">{project?.updated_at ? new Date(project.updated_at).toLocaleDateString() : "Unknown"}</p>
+              <p className="text-sm">
+                {project?.updated_at
+                  ? new Date(project.updated_at).toLocaleDateString()
+                  : "Unknown"}
+              </p>
             </div>
 
             <div className="space-y-1">
               <p className="text-sm font-medium">Last Activity:</p>
               <p className="text-sm">
-                {currentStatus === "pending" ? "No activity yet" :
-                currentStatus === "sent" ? "Email delivered on April 13, 2025" :
-                currentStatus === "viewed" ? "Client viewed on April 14, 2025" :
-                "Client signed on April 15, 2025"}
+                {currentStatus === "pending"
+                  ? "No activity yet"
+                  : currentStatus === "sent"
+                  ? "Email delivered on April 13, 2025"
+                  : currentStatus === "viewed"
+                  ? "Client viewed on April 14, 2025"
+                  : "Client signed on April 15, 2025"}
               </p>
             </div>
 
@@ -1138,5 +1311,14 @@ export default function EngagementLetterPage() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+// Wrapping the original component in a Suspense boundary to fix the error
+export default function EngagementLetterPage() {
+  return (
+    <Suspense fallback={<Loader2 className="h-8 w-8 animate-spin m-auto" />}>
+      <EngagementLetterInner />
+    </Suspense>
   );
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
 import axios from "axios";
@@ -8,8 +9,21 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -25,7 +39,7 @@ import {
   Clock,
   FileText,
   RefreshCw,
-  ChevronRight
+  ChevronRight,
 } from "lucide-react";
 
 // API base URL
@@ -79,23 +93,28 @@ interface StaffMember {
 const MESSAGE_TEMPLATES = [
   {
     label: "Request Document",
-    value: "Could you please upload the requested document(s) at your earliest convenience? This will help us proceed with your project."
+    value:
+      "Could you please upload the requested document(s) at your earliest convenience? This will help us proceed with your project.",
   },
   {
     label: "Engagement Letter",
-    value: "We've sent your engagement letter for signature. Please review and sign it to move forward with your project."
+    value:
+      "We've sent your engagement letter for signature. Please review and sign it to move forward with your project.",
   },
   {
     label: "Schedule Call",
-    value: "Would you like to schedule a call to discuss your project? Please let me know some times that work for you."
+    value:
+      "Would you like to schedule a call to discuss your project? Please let me know some times that work for you.",
   },
   {
     label: "Thank You",
-    value: "Thank you for uploading the documents. We'll review them and get back to you shortly."
-  }
+    value:
+      "Thank you for uploading the documents. We'll review them and get back to you shortly.",
+  },
 ];
 
-export default function StaffMessages() {
+// The inner component that uses useSearchParams()
+function StaffMessagesInner() {
   // Get project ID from URL query params
   const searchParams = useSearchParams();
   const projectId = parseInt(searchParams.get("project_id") || "1");
@@ -116,7 +135,9 @@ export default function StaffMessages() {
   const loadProject = async () => {
     setLoading(true);
     try {
-      const projectResponse = await axios.get(`${API_BASE_URL}/projects/${projectId}`);
+      const projectResponse = await axios.get(
+        `${API_BASE_URL}/projects/${projectId}`
+      );
       const projectData = projectResponse.data;
       setProject(projectData);
 
@@ -160,7 +181,7 @@ export default function StaffMessages() {
         project_id: projectId,
         sender: "staff",
         sender_id: currentStaff.id,
-        text: newMessage
+        text: newMessage,
       });
 
       // Add the new message to the list
@@ -212,7 +233,10 @@ export default function StaffMessages() {
       } else if (diffInDays < 7) {
         return `${diffInDays}d ago`;
       } else {
-        return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+        return date.toLocaleDateString(undefined, {
+          month: "short",
+          day: "numeric",
+        });
       }
     } catch (e) {
       return "";
@@ -222,7 +246,7 @@ export default function StaffMessages() {
   // Get staff name by ID
   const getStaffName = (staffId: string | undefined) => {
     if (!staffId) return "Staff";
-    const staff = staffMembers.find(s => s.id === staffId);
+    const staff = staffMembers.find((s) => s.id === staffId);
     return staff ? staff.name : "Staff";
   };
 
@@ -239,6 +263,7 @@ export default function StaffMessages() {
     const intervalId = setInterval(loadProject, 30000); // Poll every 30 seconds
 
     return () => clearInterval(intervalId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
 
   return (
@@ -310,29 +335,51 @@ export default function StaffMessages() {
                   <>
                     {messages.map((message, index) => {
                       const isStaff = message.sender === "staff";
-                      const showDate = index === 0 ||
-                        (messages[index-1].timestamp && message.timestamp &&
-                         new Date(messages[index-1].timestamp).toDateString() !==
-                         new Date(message.timestamp).toDateString());
+                      const showDate =
+                        index === 0 ||
+                        (messages[index - 1].timestamp &&
+                          message.timestamp &&
+                          new Date(messages[index - 1].timestamp).toDateString() !==
+                            new Date(message.timestamp).toDateString());
 
                       return (
                         <div key={message.id}>
                           {showDate && message.timestamp && (
                             <div className="flex justify-center my-4">
                               <Badge variant="outline" className="bg-background">
-                                {new Date(message.timestamp).toLocaleDateString(undefined,
-                                  { weekday: "long", month: "long", day: "numeric" })}
+                                {new Date(message.timestamp).toLocaleDateString(
+                                  undefined,
+                                  {
+                                    weekday: "long",
+                                    month: "long",
+                                    day: "numeric",
+                                  }
+                                )}
                               </Badge>
                             </div>
                           )}
 
-                          <div className={`flex ${isStaff ? "justify-end" : "justify-start"}`}>
-                            <div className={`
-                              flex items-start space-x-2 max-w-[80%]
-                              ${isStaff ? "flex-row-reverse space-x-reverse" : ""}
-                            `}>
+                          <div
+                            className={`flex ${
+                              isStaff ? "justify-end" : "justify-start"
+                            }`}
+                          >
+                            <div
+                              className={`
+                                flex items-start space-x-2 max-w-[80%]
+                                ${
+                                  isStaff
+                                    ? "flex-row-reverse space-x-reverse"
+                                    : ""
+                                }
+                              `}
+                            >
                               <Avatar className="h-8 w-8 mt-1">
-                                <AvatarFallback className={isStaff ? "bg-primary/20" : "bg-muted"}>
+                                <AvatarFallback
+                                  className={
+                                    isStaff ? "bg-primary/20" : "bg-muted"
+                                  }
+                                >
                                   {isStaff ? (
                                     <Users className="h-4 w-4 text-primary" />
                                   ) : (
@@ -342,22 +389,30 @@ export default function StaffMessages() {
                               </Avatar>
 
                               <div>
-                                <div className={`
-                                  px-4 py-2.5 rounded-lg shadow-sm
-                                  ${isStaff 
-                                    ? "bg-primary text-primary-foreground" 
-                                    : "bg-background border"}
-                                `}>
+                                <div
+                                  className={`
+                                    px-4 py-2.5 rounded-lg shadow-sm
+                                    ${
+                                      isStaff
+                                        ? "bg-primary text-primary-foreground"
+                                        : "bg-background border"
+                                    }
+                                  `}
+                                >
                                   <div className="text-xs text-muted-foreground mb-1">
-                                    {isStaff ? getStaffName(message.sender_id) : project?.client_name}
+                                    {isStaff
+                                      ? getStaffName(message.sender_id)
+                                      : project?.client_name}
                                   </div>
                                   <p className="text-sm">{message.text}</p>
                                 </div>
 
-                                <div className={`
-                                  mt-1 text-xs text-muted-foreground flex items-center
-                                  ${isStaff ? "justify-end" : ""}
-                                `}>
+                                <div
+                                  className={`
+                                    mt-1 text-xs text-muted-foreground flex items-center
+                                    ${isStaff ? "justify-end" : ""}
+                                  `}
+                                >
                                   <Clock className="h-3 w-3 mr-1" />
                                   <span>{formatRelativeTime(message.timestamp)}</span>
                                 </div>
@@ -405,7 +460,11 @@ export default function StaffMessages() {
                       disabled={sendingMessage || !newMessage.trim() || !currentStaff}
                       size="icon"
                     >
-                      {sendingMessage ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                      {sendingMessage ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Send className="h-4 w-4" />
+                      )}
                     </Button>
                   </div>
                 </div>
@@ -426,7 +485,7 @@ export default function StaffMessages() {
                     <Select
                       value={currentStaff?.id || ""}
                       onValueChange={(value) => {
-                        const staff = staffMembers.find(s => s.id === value);
+                        const staff = staffMembers.find((s) => s.id === value);
                         if (staff) setCurrentStaff(staff);
                       }}
                     >
@@ -434,7 +493,7 @@ export default function StaffMessages() {
                         <SelectValue placeholder="Select your identity" />
                       </SelectTrigger>
                       <SelectContent>
-                        {staffMembers.map(staff => (
+                        {staffMembers.map((staff) => (
                           <SelectItem key={staff.id} value={staff.id}>
                             {staff.name} ({staff.role})
                           </SelectItem>
@@ -461,7 +520,9 @@ export default function StaffMessages() {
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Service:</span>
-                        <span className="font-medium">{project.service_type || "N/A"}</span>
+                        <span className="font-medium">
+                          {project.service_type || "N/A"}
+                        </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Status:</span>
@@ -475,7 +536,9 @@ export default function StaffMessages() {
                 <Card>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-md">Message Templates</CardTitle>
-                    <CardDescription>Quick responses for common situations</CardDescription>
+                    <CardDescription>
+                      Quick responses for common situations
+                    </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-2">
                     <Select onValueChange={applyTemplate} value={selectedTemplate}>
@@ -499,15 +562,21 @@ export default function StaffMessages() {
                     <CardHeader className="pb-2">
                       <CardTitle className="text-md">Client Documents</CardTitle>
                       <CardDescription>
-                        {project.docs.length} document{project.docs.length !== 1 ? 's' : ''} uploaded
+                        {project.docs.length} document
+                        {project.docs.length !== 1 ? "s" : ""} uploaded
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
                       <div className="space-y-2">
                         {project.docs.slice(0, 5).map((doc) => (
-                          <div key={doc.doc_id} className="flex items-center space-x-2 text-sm">
+                          <div
+                            key={doc.doc_id}
+                            className="flex items-center space-x-2 text-sm"
+                          >
                             <FileText className="h-4 w-4 text-primary" />
-                            <span className="truncate flex-1">{doc.original_name}</span>
+                            <span className="truncate flex-1">
+                              {doc.original_name}
+                            </span>
                             <Badge variant="outline" className="text-xs">
                               {doc.doc_type}
                             </Badge>
@@ -529,9 +598,7 @@ export default function StaffMessages() {
                 {/* Action buttons */}
                 <div className="space-y-2">
                   <Link href={`/project/${projectId}`} className="w-full block">
-                    <Button className="w-full">
-                      View Project Details
-                    </Button>
+                    <Button className="w-full">View Project Details</Button>
                   </Link>
                 </div>
               </div>
@@ -540,5 +607,14 @@ export default function StaffMessages() {
         </div>
       )}
     </div>
+  );
+}
+
+// Now wrap StaffMessagesInner in a Suspense boundary:
+export default function StaffMessages() {
+  return (
+    <Suspense fallback={<Loader2 className="h-8 w-8 animate-spin m-auto" />}>
+      <StaffMessagesInner />
+    </Suspense>
   );
 }
