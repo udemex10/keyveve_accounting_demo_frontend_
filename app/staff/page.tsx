@@ -11,14 +11,14 @@ import {
   CardDescription,
   CardFooter,
   CardHeader,
-  CardTitle
+  CardTitle,
 } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue
+  SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -30,13 +30,13 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogFooter
+  DialogFooter,
 } from "@/components/ui/dialog";
 import {
   Tabs,
   TabsContent,
   TabsList,
-  TabsTrigger
+  TabsTrigger,
 } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -66,16 +66,28 @@ import {
   BarChart3,
   Inbox,
   Landmark,
-  Calendar
+  Calendar,
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
+import { Skeleton } from "@/components/ui/skeleton";
 import WorkflowTemplateSelector from "@/components/WorkflowTemplateSelector";
 
-// **Import the EnhancedProjectCard**:
+// -- existing imports …                                            //
+import FirmTaskBoard, { TaskLite } from "@/components/FirmTaskBoard";
 import EnhancedProjectCard from "@/components/EnhancedProjectCard";
+import FirmEngagementTable, {
+  FirmEngagement,
+} from "@/components/FirmEngagementTable";
+import { dummyEngagements, dummyProspects } from "@/components/DummyFirmData";
+import AnalyticsTab from "@/components/AnalyticsTab";
+import { Search } from "lucide-react";
+// 👇 NEW imports (step 1️⃣)
+import AllClientsTable from "@/components/AllClientsTable";
+import NewClientsTable from "@/components/NewClientsTable";
+// -- existing imports continue …                                   //
 
 // API base URL
-const API_BASE_URL = "https://keyveve-accounting-demo-backend.onrender.com";
+const API_BASE_URL = "http://localhost:8000";
 
 // Project status options
 const PROJECT_STATUSES = [
@@ -85,7 +97,7 @@ const PROJECT_STATUSES = [
   "Pricing/Analysis",
   "Awaiting Signature",
   "Project Started",
-  "Completed"
+  "Completed",
 ];
 
 // Service types
@@ -94,7 +106,7 @@ const SERVICE_TYPES = [
   "Bookkeeping",
   "Financial Planning",
   "Audit",
-  "Advisory"
+  "Advisory",
 ];
 
 // Interface definitions
@@ -183,22 +195,24 @@ const QAComponent = () => {
     try {
       const response = await axios.post(`${API_BASE_URL}/qa`, {
         question: question,
-        global_context: true
+        global_context: true,
       });
 
       setAnswer(response.data.answer);
       toast({
         title: "Question processed",
-        description: "AI has provided an answer based on your data."
+        description: "AI has provided an answer based on your data.",
       });
     } catch (error) {
       console.error("Error asking question:", error);
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Could not get an answer. Please try again."
+        description: "Could not get an answer. Please try again.",
       });
-      setAnswer("I'm sorry, I couldn't process that question. Please try again or rephrase your question.");
+      setAnswer(
+        "I'm sorry, I couldn't process that question. Please try again or rephrase your question."
+      );
     } finally {
       setIsAsking(false);
     }
@@ -227,10 +241,7 @@ const QAComponent = () => {
               }
             }}
           />
-          <Button
-            onClick={askQuestion}
-            disabled={isAsking || !question.trim()}
-          >
+          <Button onClick={askQuestion} disabled={isAsking || !question.trim()}>
             {isAsking ? <Loader2 className="h-4 w-4 animate-spin" /> : "Ask"}
           </Button>
         </div>
@@ -277,7 +288,53 @@ export default function StaffDashboardPage() {
   // **Add the view mode state**:
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
 
+  // Add the project risk scores state
+  const [projectRiskScores, setProjectRiskScores] = useState<
+    Record<number, number>
+  >({});
+
+  // ** [NEW] State for Firm Engagements (dummy data fallback) **
+  const [allEngagements, setAllEngagements] = useState<FirmEngagement[]>(
+    dummyEngagements
+  );
+
+  const [allProspects, setAllProspects] = useState(dummyProspects);
+
   const { toast } = useToast();
+
+  // ---------------------- New helper: flatten tasks for FirmTaskBoard ----------------------
+  function flattenTasks(projects: Project[]): TaskLite[] {
+    return projects.flatMap((p) =>
+      p.tasks.map((t) => ({
+        id: t.id,
+        title: t.title,
+        status: t.status as TaskLite["status"], // cast to match our union
+        projectId: p.id,
+        projectName: p.client_name,
+        service: p.service_type ?? "Unknown",
+        assignees: t.assigned_to ?? [],
+        deadline: t.deadline,
+        hoursLogged: 0, // or map from your data if you store hours
+      }))
+    );
+  }
+
+  // ---------------------- New helper: calculate project progress ----------------------
+  function calcProgress(proj: Project): number {
+    if (!proj.tasks?.length) return 0;
+    const doneCount = proj.tasks.filter((t) => t.status === "completed").length;
+    return Math.round((doneCount / proj.tasks.length) * 100);
+  }
+
+  // Generate risk scores for projects
+  const generateRiskScores = useCallback((projectList: Project[]) => {
+    const scores: Record<number, number> = {};
+    projectList.forEach((project) => {
+      // Generate a random risk score between 0-100 for demo purposes
+      scores[project.id] = Math.floor(Math.random() * 100);
+    });
+    setProjectRiskScores(scores);
+  }, []);
 
   // Fetch projects
   const fetchProjects = useCallback(async () => {
@@ -298,22 +355,23 @@ export default function StaffDashboardPage() {
 
       const response = await axios.get(url);
       setProjects(response.data);
+      generateRiskScores(response.data);
 
       toast({
         title: "Projects loaded",
-        description: `Loaded ${response.data.length} projects`
+        description: `Loaded ${response.data.length} projects`,
       });
     } catch (error) {
       console.error("Error fetching projects:", error);
       toast({
         variant: "destructive",
         title: "Error loading projects",
-        description: "Could not load projects. Please try again."
+        description: "Could not load projects. Please try again.",
       });
     } finally {
       setLoading(false);
     }
-  }, [toast, statusFilter, serviceFilter, staffFilter]);
+  }, [toast, statusFilter, serviceFilter, staffFilter, generateRiskScores]);
 
   // Fetch notifications
   const fetchNotifications = useCallback(async () => {
@@ -372,7 +430,7 @@ export default function StaffDashboardPage() {
       toast({
         variant: "destructive",
         title: "Client name required",
-        description: "Please enter a client name to create a project."
+        description: "Please enter a client name to create a project.",
       });
       return;
     }
@@ -384,7 +442,7 @@ export default function StaffDashboardPage() {
         service_type: serviceType,
         source: "manual",
         assigned_staff: selectedStaff.length > 0 ? selectedStaff : undefined,
-        staff_roles: staffRoles
+        staff_roles: staffRoles,
       });
 
       setClientName("");
@@ -395,14 +453,14 @@ export default function StaffDashboardPage() {
 
       toast({
         title: "Project created",
-        description: `Created a new project for ${clientName}.`
+        description: `Created a new project for ${clientName}.`,
       });
     } catch (error) {
       console.error("Error creating project:", error);
       toast({
         variant: "destructive",
         title: "Error creating project",
-        description: "Could not create project. Please try again."
+        description: "Could not create project. Please try again.",
       });
     } finally {
       setLoading(false);
@@ -421,14 +479,14 @@ export default function StaffDashboardPage() {
 
       toast({
         title: "Status updated",
-        description: `Project status changed to ${newStatus}.`
+        description: `Project status changed to ${newStatus}.`,
       });
     } catch (error) {
       console.error("Error updating status:", error);
       toast({
         variant: "destructive",
         title: "Error updating status",
-        description: "Could not update project status. Please try again."
+        description: "Could not update project status. Please try again.",
       });
     } finally {
       setLoading(false);
@@ -441,7 +499,7 @@ export default function StaffDashboardPage() {
       toast({
         variant: "destructive",
         title: "CSV content required",
-        description: "Please enter CSV content to import."
+        description: "Please enter CSV content to import.",
       });
       return;
     }
@@ -451,7 +509,7 @@ export default function StaffDashboardPage() {
       const response = await axios.post(
         `${API_BASE_URL}/integrations/import-csv`,
         {
-          file_content: csvContent
+          file_content: csvContent,
         }
       );
 
@@ -462,14 +520,14 @@ export default function StaffDashboardPage() {
 
       toast({
         title: "CSV import successful",
-        description: `Imported ${response.data.imported_count} projects from CSV.`
+        description: `Imported ${response.data.imported_count} projects from CSV.`,
       });
     } catch (error) {
       console.error("Error importing CSV:", error);
       toast({
         variant: "destructive",
         title: "Error importing CSV",
-        description: "Could not import CSV. Please check format and try again."
+        description: "Could not import CSV. Please check format and try again.",
       });
     } finally {
       setLoading(false);
@@ -486,7 +544,7 @@ export default function StaffDashboardPage() {
 
       toast({
         title: "PMS import successful",
-        description: `Imported ${response.data.imported_count} projects from practice management software.`
+        description: `Imported ${response.data.imported_count} projects from practice management software.`,
       });
     } catch (error) {
       console.error("Error importing from PMS:", error);
@@ -494,7 +552,7 @@ export default function StaffDashboardPage() {
         variant: "destructive",
         title: "Error importing from PMS",
         description:
-          "Could not import from practice management software. Please try again."
+          "Could not import from practice management software. Please try again.",
       });
     } finally {
       setLoading(false);
@@ -509,7 +567,7 @@ export default function StaffDashboardPage() {
 
       await axios.post(`${API_BASE_URL}/integrations/connect`, {
         integration_type: integrationType,
-        action: isConnected ? "disconnect" : "connect"
+        action: isConnected ? "disconnect" : "connect",
       });
 
       fetchIntegrations();
@@ -520,7 +578,7 @@ export default function StaffDashboardPage() {
           : "Integration connected",
         description: `Successfully ${
           isConnected ? "disconnected from" : "connected to"
-        } ${integrations[integrationType]?.name}.`
+        } ${integrations[integrationType]?.name}.`,
       });
     } catch (error) {
       console.error("Error connecting integration:", error);
@@ -528,7 +586,7 @@ export default function StaffDashboardPage() {
         variant: "destructive",
         title: "Error with integration",
         description:
-          "Could not connect/disconnect integration. Please try again."
+          "Could not connect/disconnect integration. Please try again.",
       });
     } finally {
       setIntegrationsLoading(false);
@@ -549,10 +607,10 @@ export default function StaffDashboardPage() {
   const getFilteredProjects = () => {
     if (selectedTab === "active-projects") {
       return projects.filter((p) => p.status !== "Completed");
-    } else if (selectedTab === "completed-projects") {
-      return projects.filter((p) => p.status === "Completed");
     } else if (selectedTab === "awaiting-signature") {
       return projects.filter((p) => p.status === "Awaiting Signature");
+    } else if (selectedTab === "completed-projects") {
+      return projects.filter((p) => p.status === "Completed");
     }
     return projects;
   };
@@ -722,14 +780,18 @@ export default function StaffDashboardPage() {
             {/* AI Assistant Component */}
             <QAComponent />
 
+            {/* TOP-LEVEL TABS */}
             <Tabs defaultValue="project-management" className="w-full">
-              <TabsList className="grid grid-cols-2 md:grid-cols-4 lg:w-auto">
-                <TabsTrigger value="project-management">Projects</TabsTrigger>
+              <TabsList className="grid grid-cols-2 md:grid-cols-6 lg:w-auto">
+                <TabsTrigger value="project-management">Engagements</TabsTrigger>
                 <TabsTrigger value="import">Import/Onboarding</TabsTrigger>
                 <TabsTrigger value="integrations">Integrations</TabsTrigger>
                 <TabsTrigger value="analytics">Analytics</TabsTrigger>
+                <TabsTrigger value="firmwide-tasks">Project Tasks</TabsTrigger>
+                <TabsTrigger value="firm-view">Firm View</TabsTrigger>
               </TabsList>
 
+              {/* =============== Engagements Tab =============== */}
               <TabsContent
                 value="project-management"
                 className="space-y-6 mt-6"
@@ -821,7 +883,7 @@ export default function StaffDashboardPage() {
                     </Button>
                   </div>
 
-                  {/* The new grid/list toggle + refresh button */}
+                  {/* Grid/list toggle + refresh button */}
                   <div className="flex gap-2">
                     <Button
                       variant={viewMode === "grid" ? "default" : "outline"}
@@ -857,7 +919,10 @@ export default function StaffDashboardPage() {
                 >
                   <TabsList>
                     <TabsTrigger value="active-projects">
-                      Active Projects
+                      Active Engagements
+                    </TabsTrigger>
+                    <TabsTrigger value="prospective-engagements">
+                      Prospective Engagements
                     </TabsTrigger>
                     <TabsTrigger value="awaiting-signature">
                       Awaiting Signature
@@ -867,12 +932,13 @@ export default function StaffDashboardPage() {
                     </TabsTrigger>
                   </TabsList>
 
+                  {/* Content: Active Engagements */}
                   <TabsContent
                     value="active-projects"
                     className="space-y-4 mt-6"
                   >
                     <h2 className="text-xl font-semibold tracking-tight flex items-center">
-                      Active Projects
+                      Active Engagements
                       <Badge variant="outline" className="ml-2">
                         {getFilteredProjects().length} Projects
                       </Badge>
@@ -901,7 +967,6 @@ export default function StaffDashboardPage() {
                         </CardContent>
                       </Card>
                     ) : (
-                      // **Use the EnhancedProjectCard**:
                       <div
                         className={
                           viewMode === "grid"
@@ -916,12 +981,32 @@ export default function StaffDashboardPage() {
                             viewMode={viewMode}
                             onStatusChange={handleStatusChange}
                             staffMembers={staffMembers}
+                            progress={calcProgress(proj)}
+                            riskScore={projectRiskScores[proj.id] ?? 50}
                           />
                         ))}
                       </div>
                     )}
                   </TabsContent>
 
+                  {/* Content: Prospective Engagements */}
+                  <TabsContent
+                    value="prospective-engagements"
+                    className="space-y-4 mt-6"
+                  >
+                    <h2 className="text-xl font-semibold tracking-tight">
+                      Prospective Engagements
+                    </h2>
+                    <Card>
+                      <CardContent className="py-6 text-center">
+                        <p className="text-muted-foreground">
+                          No prospective engagements at the moment.
+                        </p>
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
+
+                  {/* Content: Awaiting Signature */}
                   <TabsContent
                     value="awaiting-signature"
                     className="space-y-4 mt-6"
@@ -952,12 +1037,15 @@ export default function StaffDashboardPage() {
                             viewMode={viewMode}
                             onStatusChange={handleStatusChange}
                             staffMembers={staffMembers}
+                            progress={calcProgress(proj)}
+                            riskScore={projectRiskScores[proj.id] ?? 50}
                           />
                         ))}
                       </div>
                     )}
                   </TabsContent>
 
+                  {/* Content: Completed */}
                   <TabsContent
                     value="completed-projects"
                     className="space-y-4 mt-6"
@@ -988,6 +1076,8 @@ export default function StaffDashboardPage() {
                             viewMode={viewMode}
                             onStatusChange={handleStatusChange}
                             staffMembers={staffMembers}
+                            progress={calcProgress(proj)}
+                            riskScore={projectRiskScores[proj.id] ?? 50}
                           />
                         ))}
                       </div>
@@ -1016,7 +1106,7 @@ export default function StaffDashboardPage() {
 
                           toast({
                             title: "Project created",
-                            description: `Created a new ${projectData.service_type} project for ${projectData.client_name}.`
+                            description: `Created a new ${projectData.service_type} project for ${projectData.client_name}.`,
                           });
 
                           fetchProjects();
@@ -1026,7 +1116,7 @@ export default function StaffDashboardPage() {
                             variant: "destructive",
                             title: "Error creating project",
                             description:
-                              "Could not create project. Please try again."
+                              "Could not create project. Please try again.",
                           });
                         } finally {
                           setLoading(false);
@@ -1037,6 +1127,7 @@ export default function StaffDashboardPage() {
                 </Card>
               </TabsContent>
 
+              {/* =============== Import/Onboarding Tab =============== */}
               <TabsContent value="import" className="space-y-6 mt-6">
                 <div className="grid gap-6 md:grid-cols-2">
                   <Card>
@@ -1147,6 +1238,7 @@ Acme Corp,Bookkeeping`}
                 </div>
               </TabsContent>
 
+              {/* =============== Integrations Tab =============== */}
               <TabsContent value="integrations" className="space-y-6 mt-6">
                 <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                   <Card>
@@ -1452,7 +1544,8 @@ Acme Corp,Bookkeeping`}
                     <CardHeader>
                       <CardTitle>Outlook Calendar</CardTitle>
                       <CardDescription>
-                        Integration with Microsoft Outlook Calendar for task scheduling.
+                        Integration with Microsoft Outlook Calendar for task
+                        scheduling.
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
@@ -1510,155 +1603,70 @@ Acme Corp,Bookkeeping`}
                 </div>
               </TabsContent>
 
+              {/* =============== Analytics Tab =============== */}
               <TabsContent value="analytics" className="space-y-6 mt-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Project Analytics</CardTitle>
-                    <CardDescription>
-                      Overview of project statuses and document processing.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-6">
-                    <div className="space-y-2">
-                      <h3 className="text-sm font-medium">
-                        Projects by Status
-                      </h3>
-                      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                        {PROJECT_STATUSES.map((status) => {
-                          const count = projects.filter(
-                            (p) => p.status === status
-                          ).length;
-                          const percentage =
-                            projects.length > 0
-                              ? (count / projects.length) * 100
-                              : 0;
+                <AnalyticsTab data={allEngagements} />
+              </TabsContent>
 
-                          return (
-                            <div key={status} className="rounded-lg border p-3">
-                              <div className="text-xs font-medium text-muted-foreground mb-1">
-                                {status}
-                              </div>
-                              <div className="text-2xl font-bold">{count}</div>
-                              <Progress value={percentage} className="h-1 mt-2" />
-                            </div>
-                          );
-                        })}
+              {/* =============== Firm-wide Tasks Tab =============== */}
+              <TabsContent value="firmwide-tasks" className="space-y-6 mt-6">
+                <h2 className="text-xl font-semibold tracking-tight">
+                  Project Tasks
+                </h2>
+                {loading ? (
+                  <Skeleton className="w-full h-60" />
+                ) : (
+                  <FirmTaskBoard tasks={flattenTasks(projects)} />
+                )}
+                <p className="mt-3 text-xs text-muted-foreground">
+                  Drag cards to update status. Calendar sync is stubbed for demo.
+                </p>
+              </TabsContent>
+
+              {/* =============== [NEW] Firm View Tab =============== */}
+              {/* step 2️⃣: Replace the old <TabsContent value="firm-view"> block with this updated code */}
+              {/* ------------------------------------------------------------------ */}
+              {/*  UPDATED: Firm-View tab with nested “All / New Clients” sub-tabs   */}
+              {/* ------------------------------------------------------------------ */}
+              <TabsContent value="firm-view" className="space-y-6 mt-6">
+                <Tabs defaultValue="all-clients" className="space-y-6">
+                  {/* -------------- sub-tab bar -------------- */}
+                  <TabsList>
+                    <TabsTrigger value="all-clients">All Clients</TabsTrigger>
+                    <TabsTrigger value="new-clients">New Clients</TabsTrigger>
+                  </TabsList>
+
+                  {/* ----------- All Clients tab ----------- */}
+                  <TabsContent value="all-clients" className="space-y-6">
+                    {/* (optional) quick filter bar for All-Clients only */}
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center border rounded-md px-2">
+                        <Search className="h-4 w-4 text-muted-foreground" />
+                        <Input
+                          placeholder="Search client / business…"
+                          className="border-0 focus-visible:ring-0"
+                          onChange={(e) =>
+                            setAllEngagements(
+                              dummyEngagements.filter((eng) =>
+                                `${eng.clientName} ${eng.businessName ?? ""}`
+                                  .toLowerCase()
+                                  .includes(e.target.value.toLowerCase())
+                              )
+                            )
+                          }
+                        />
                       </div>
                     </div>
 
-                    <div className="space-y-2">
-                      <h3 className="text-sm font-medium">
-                        Projects by Service Type
-                      </h3>
-                      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                        {SERVICE_TYPES.map((service) => {
-                          const count = projects.filter(
-                            (p) => p.service_type === service
-                          ).length;
-                          const percentage =
-                            projects.length > 0
-                              ? (count / projects.length) * 100
-                              : 0;
+                    {/* All-Clients virtual table */}
+                    <AllClientsTable data={allEngagements} />
+                  </TabsContent>
 
-                          return (
-                            <div key={service} className="rounded-lg border p-3">
-                              <div className="flex items-center mb-1">
-                                {getServiceIcon(service)}
-                                <span className="text-xs font-medium text-muted-foreground ml-1">
-                                  {service}
-                                </span>
-                              </div>
-                              <div className="text-2xl font-bold">{count}</div>
-                              <Progress value={percentage} className="h-1 mt-2" />
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <h3 className="text-sm font-medium">
-                        Documents Processed
-                      </h3>
-                      <div className="grid gap-4 sm:grid-cols-2">
-                        <div className="rounded-lg border p-3">
-                          <div className="text-xs font-medium text-muted-foreground mb-1">
-                            Total Documents
-                          </div>
-                          <div className="text-2xl font-bold">
-                            {projects.reduce(
-                              (sum, proj) => sum + proj.docs.length,
-                              0
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="rounded-lg border p-3">
-                          <div className="text-xs font-medium text-muted-foreground mb-1">
-                            Document Types
-                          </div>
-                          <div className="grid grid-cols-2 gap-2 text-sm">
-                            <div>
-                              W-2:{" "}
-                              <span className="font-medium">
-                                {projects.reduce(
-                                  (sum, proj) =>
-                                    sum +
-                                    proj.docs.filter(
-                                      (d) => d.doc_type === "W-2"
-                                    ).length,
-                                  0
-                                )}
-                              </span>
-                            </div>
-                            <div>
-                              1099:{" "}
-                              <span className="font-medium">
-                                {projects.reduce(
-                                  (sum, proj) =>
-                                    sum +
-                                    proj.docs.filter(
-                                      (d) => d.doc_type === "1099"
-                                    ).length,
-                                  0
-                                )}
-                              </span>
-                            </div>
-                            <div>
-                              Invoice:{" "}
-                              <span className="font-medium">
-                                {projects.reduce(
-                                  (sum, proj) =>
-                                    sum +
-                                    proj.docs.filter(
-                                      (d) => d.doc_type === "Invoice"
-                                    ).length,
-                                  0
-                                )}
-                              </span>
-                            </div>
-                            <div>
-                              Other:{" "}
-                              <span className="font-medium">
-                                {projects.reduce(
-                                  (sum, proj) =>
-                                    sum +
-                                    proj.docs.filter(
-                                      (d) =>
-                                        !["W-2", "1099", "Invoice"].includes(
-                                          d.doc_type
-                                        )
-                                    ).length,
-                                  0
-                                )}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                  {/* ----------- New Clients tab ----------- */}
+                  <TabsContent value="new-clients" className="space-y-6">
+                    <NewClientsTable prospects={allProspects} />
+                  </TabsContent>
+                </Tabs>
               </TabsContent>
             </Tabs>
           </div>

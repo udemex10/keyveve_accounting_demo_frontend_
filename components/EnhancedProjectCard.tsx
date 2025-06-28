@@ -1,6 +1,8 @@
 /*
   EnhancedProjectCard.tsx (updated)
-  Displays a single project in either grid (card) or list view, with workflow‑specific snapshot metrics **and** a linear status tracker.
+  Displays a single project in either grid (card) or list view,
+  with workflow‑specific snapshot metrics, a linear status tracker,
+  and a compact risk score badge.
 */
 
 "use client";
@@ -13,7 +15,7 @@ import {
   CardContent,
   CardFooter,
   CardTitle,
-  CardDescription
+  CardDescription,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,14 +28,14 @@ import {
   HelpCircle,
   Landmark,
   BarChart3,
-  Building
+  Building,
 } from "lucide-react";
 import {
   Select,
   SelectTrigger,
   SelectValue,
   SelectContent,
-  SelectItem
+  SelectItem,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { differenceInDays } from "date-fns";
@@ -72,7 +74,8 @@ interface EnhancedProjectCardProps {
   viewMode: "grid" | "list";
   onStatusChange: (projectId: number, newStatus: string) => void;
   staffMembers: StaffMember[];
-  projectStatuses?: string[]; // allow override from parent – fallback provided
+  projectStatuses?: string[];
+  riskScore?: number; // <-- We'll show this as a tiny badge
 }
 
 /* ------------------------------------------------------------------
@@ -85,7 +88,7 @@ const PROJECT_STATUSES = [
   "Pricing/Analysis",
   "Awaiting Signature",
   "Project Started",
-  "Completed"
+  "Completed",
 ];
 
 const getServiceIcon = (serviceType?: string): JSX.Element => {
@@ -107,17 +110,46 @@ const getServiceIcon = (serviceType?: string): JSX.Element => {
 
 const renderStatusBadge = (status: string): JSX.Element => {
   const statusColors: Record<string, { color: string; bg: string }> = {
-    Onboarding: { color: "text-blue-700 dark:text-blue-400", bg: "bg-blue-100 dark:bg-blue-900/30" },
-    "Docs Requested": { color: "text-amber-700 dark:text-amber-400", bg: "bg-amber-100 dark:bg-amber-900/30" },
-    "Docs Received": { color: "text-violet-700 dark:text-violet-400", bg: "bg-violet-100 dark:bg-violet-900/30" },
-    "Pricing/Analysis": { color: "text-cyan-700 dark:text-cyan-400", bg: "bg-cyan-100 dark:bg-cyan-900/30" },
-    "Awaiting Signature": { color: "text-pink-700 dark:text-pink-400", bg: "bg-pink-100 dark:bg-pink-900/30" },
-    "Project Started": { color: "text-emerald-700 dark:text-emerald-400", bg: "bg-emerald-100 dark:bg-emerald-900/30" },
-    Completed: { color: "text-green-700 dark:text-green-400", bg: "bg-green-100 dark:bg-green-900/30" }
+    Onboarding: {
+      color: "text-blue-700 dark:text-blue-400",
+      bg: "bg-blue-100 dark:bg-blue-900/30",
+    },
+    "Docs Requested": {
+      color: "text-amber-700 dark:text-amber-400",
+      bg: "bg-amber-100 dark:bg-amber-900/30",
+    },
+    "Docs Received": {
+      color: "text-violet-700 dark:text-violet-400",
+      bg: "bg-violet-100 dark:bg-violet-900/30",
+    },
+    "Pricing/Analysis": {
+      color: "text-cyan-700 dark:text-cyan-400",
+      bg: "bg-cyan-100 dark:bg-cyan-900/30",
+    },
+    "Awaiting Signature": {
+      color: "text-pink-700 dark:text-pink-400",
+      bg: "bg-pink-100 dark:bg-pink-900/30",
+    },
+    "Project Started": {
+      color: "text-emerald-700 dark:text-emerald-400",
+      bg: "bg-emerald-100 dark:bg-emerald-900/30",
+    },
+    Completed: {
+      color: "text-green-700 dark:text-green-400",
+      bg: "bg-green-100 dark:bg-green-900/30",
+    },
   };
-  const style = statusColors[status] || { color: "text-gray-700 dark:text-gray-400", bg: "bg-gray-100 dark:bg-gray-900/30" };
+  const style =
+    statusColors[status] || {
+      color: "text-gray-700 dark:text-gray-400",
+      bg: "bg-gray-100 dark:bg-gray-900/30",
+    };
   return (
-    <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${style.color} ${style.bg}`}>{status}</span>
+    <span
+      className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${style.color} ${style.bg}`}
+    >
+      {status}
+    </span>
   );
 };
 
@@ -134,36 +166,50 @@ const buildSnapshot = (project: Project) => {
       const today = new Date();
       const currentYear = today.getFullYear();
       let nextDeadline = new Date(`${currentYear}-04-15T00:00:00`);
-      if (nextDeadline < today) nextDeadline = new Date(`${currentYear + 1}-04-15T00:00:00`);
+      if (nextDeadline < today) {
+        nextDeadline = new Date(`${currentYear + 1}-04-15T00:00:00`);
+      }
       const days = differenceInDays(nextDeadline, today);
       return [
         { label: "Docs", value: project.docs.length.toString() },
-        { label: "Days to 4/15", value: days.toString() }
+        { label: "Days to 4/15", value: days.toString() },
       ];
     }
     case "Audit": {
       const openTasks = project.tasks.filter((t) => t.status !== "completed").length;
       return [
-        { label: "Open Tasks", value: `${openTasks}/${project.tasks.length}` },
-        { label: "Docs", value: project.docs.length.toString() }
+        {
+          label: "Open Tasks",
+          value: `${openTasks}/${project.tasks.length}`,
+        },
+        { label: "Docs", value: project.docs.length.toString() },
       ];
     }
     case "Bookkeeping": {
-      const dueSoon = project.tasks.filter(
-        (t) =>
+      const dueSoon = project.tasks.filter((t) => {
+        return (
           t.deadline &&
           differenceInDays(new Date(t.deadline), new Date()) <= 7 &&
           t.status !== "completed"
-      ).length;
+        );
+      }).length;
       return [
         { label: "Due ≤7d", value: dueSoon.toString() },
-        { label: "Tasks", value: `${project.tasks.filter((t) => t.status !== "completed").length}` }
+        {
+          label: "Tasks",
+          value: `${project.tasks.filter((t) => t.status !== "completed").length}`,
+        },
       ];
     }
     default: {
       return [
         { label: "Docs", value: project.docs.length.toString() },
-        { label: "Tasks", value: `${project.tasks.filter((t)=>t.status!="completed").length}/${project.tasks.length}` }
+        {
+          label: "Tasks",
+          value: `${
+            project.tasks.filter((t) => t.status !== "completed").length
+          }/${project.tasks.length}`,
+        },
       ];
     }
   }
@@ -185,7 +231,11 @@ const StatusTracker: React.FC<{ status: string }> = ({ status }) => {
             <div
               key={stage}
               className={`h-2 flex-1 rounded-sm ${
-                isCompleted ? (isCurrent ? "bg-primary" : "bg-primary/60") : "bg-muted"
+                isCompleted
+                  ? isCurrent
+                    ? "bg-primary"
+                    : "bg-primary/60"
+                  : "bg-muted"
               }`}
             />
           );
@@ -198,6 +248,16 @@ const StatusTracker: React.FC<{ status: string }> = ({ status }) => {
   );
 };
 
+// Helper to determine color for riskBadge
+function determineRiskBadgeColor(riskScore: number): string {
+  if (riskScore > 70) {
+    return "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400";
+  } else if (riskScore > 40) {
+    return "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400";
+  }
+  return "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400";
+}
+
 /* ------------------------------------------------------------------
    Main component
 -------------------------------------------------------------------*/
@@ -206,10 +266,12 @@ const EnhancedProjectCard: React.FC<EnhancedProjectCardProps> = ({
   viewMode,
   onStatusChange,
   staffMembers,
-  projectStatuses = PROJECT_STATUSES
+  projectStatuses = PROJECT_STATUSES,
+  riskScore,
 }) => {
   const snapshot = buildSnapshot(project);
 
+  // Staff listing
   const StaffSection = (
     <div className="text-sm">
       <p className="text-muted-foreground mb-1">Assigned to:</p>
@@ -219,9 +281,17 @@ const EnhancedProjectCard: React.FC<EnhancedProjectCardProps> = ({
             const role = project.staff_roles?.[sid] || "staff";
             let roleBadge = null;
             if (role === "point_of_contact") {
-              roleBadge = <Badge className="ml-1 bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">Contact</Badge>;
+              roleBadge = (
+                <Badge className="ml-1 bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+                  Contact
+                </Badge>
+              );
             } else if (role === "partner_assigned") {
-              roleBadge = <Badge className="ml-1 bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400">Partner</Badge>;
+              roleBadge = (
+                <Badge className="ml-1 bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400">
+                  Partner
+                </Badge>
+              );
             }
             return (
               <div key={sid} className="flex items-center">
@@ -237,6 +307,7 @@ const EnhancedProjectCard: React.FC<EnhancedProjectCardProps> = ({
     </div>
   );
 
+  // Snapshot row (docs, tasks, etc.)
   const SnapshotSection = (
     <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
       {snapshot.map((item) => (
@@ -263,7 +334,18 @@ const EnhancedProjectCard: React.FC<EnhancedProjectCardProps> = ({
                 </CardDescription>
               </div>
             </div>
-            {renderStatusBadge(project.status)}
+            {/* Status + risk side by side */}
+            <div className="flex flex-wrap items-center gap-2">
+              {renderStatusBadge(project.status)}
+              {/* Show compact risk badge (e.g. "80%") if riskScore is provided */}
+              {riskScore !== undefined && (
+                <Badge
+                  className={`${determineRiskBadgeColor(riskScore)} px-1.5 py-0.5 text-[10px]`}
+                >
+                  {riskScore}%
+                </Badge>
+              )}
+            </div>
           </div>
         </CardHeader>
 
@@ -334,7 +416,17 @@ const EnhancedProjectCard: React.FC<EnhancedProjectCardProps> = ({
             </CardDescription>
           </div>
         </div>
-        <div className="mt-2">{renderStatusBadge(project.status)}</div>
+        {/* Status + risk side by side */}
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          {renderStatusBadge(project.status)}
+          {riskScore !== undefined && (
+            <Badge
+              className={`${determineRiskBadgeColor(riskScore)} px-1.5 py-0.5 text-[10px]`}
+            >
+              {riskScore}%
+            </Badge>
+          )}
+        </div>
       </div>
 
       <div className="flex-1 p-4 space-y-2">

@@ -1,18 +1,38 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar } from "@/components/ui/calendar";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { useToast } from "@/components/ui/use-toast";
 import { useParams } from "next/navigation";
 import {
@@ -37,75 +57,169 @@ import {
   MessageCircle,
   CopyPlus,
   Receipt,
-    Calculator,
-    Download,
-    X
+  Calculator,
+  Download,
+  X,
+  Check,
+  XCircle,
+  CheckCircle,
 } from "lucide-react";
-import { format, addDays, isBefore, differenceInDays } from "date-fns";
+import { format, differenceInDays, isBefore } from "date-fns";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
-// Common function to calculate days remaining
-const calculateDaysRemaining = (deadline) => {
+/* --------------------------------------------------------------------------
+   NEW IMPORT: Unified Timeline replaces the old WorkflowProgressBar
+-------------------------------------------------------------------------- */
+import UnifiedProjectTimeline from "@/components/UnifiedProjectTimeline";
+
+/* --------------------------------------------------------------------------
+   Define the local workflow task interface for UnifiedProjectTimeline
+-------------------------------------------------------------------------- */
+interface WorkflowTask {
+  id: string | number;
+  name?: string;
+  status: "pending" | "in_progress" | "blocked" | "completed";
+  deadline?: string;
+}
+
+/* Example Project interface (so TypeScript doesn't complain) */
+interface Project {
+  id: number;
+  client_name: string;
+  service_type: string;
+  status: string;
+  // etc. ...
+}
+
+/* Props for main ServiceSpecificViews component */
+interface ServiceSpecificViewsProps {
+  project: Project;
+  onUpdateStatus: (s: string) => Promise<void>;
+  onTasksChange?: (tasks: WorkflowTask[]) => void;
+}
+
+/* --------------------------------------------------------------------------
+   Helper function to compute days remaining
+-------------------------------------------------------------------------- */
+const calculateDaysRemaining = (deadline: string | Date | undefined) => {
   if (!deadline) return null;
   const today = new Date();
-  const deadlineDate = new Date(deadline);
+  const deadlineDate = typeof deadline === "string" ? new Date(deadline) : deadline;
   return differenceInDays(deadlineDate, today);
 };
 
-// Tax Return View - Specialized for tax workflow
-const TaxReturnView = ({ project, onUpdateStatus }) => {
+/* --------------------------------------------------------------------------
+   TAX RETURN VIEW
+-------------------------------------------------------------------------- */
+type TaxReturnViewProps = {
+  project: Project;
+  onUpdateStatus: (status: string) => void;
+  onTasksChange?: (tasks: WorkflowTask[]) => void;
+};
+
+const TaxReturnView: React.FC<TaxReturnViewProps> = ({
+  project,
+  onUpdateStatus,
+  onTasksChange,
+}) => {
   const { toast } = useToast();
-  const [taxDeadline, setTaxDeadline] = useState("2025-04-15"); // Default tax day
+
+  // Local state
+  const [taxDeadline, setTaxDeadline] = useState("2025-04-15");
   const [returnStatus, setReturnStatus] = useState(project?.status || "Docs Requested");
   const [missingDocs, setMissingDocs] = useState([
     { id: 1, name: "W-2", status: "missing" },
     { id: 2, name: "1099-INT", status: "received" },
     { id: 3, name: "1098 Mortgage Interest", status: "missing" },
-    { id: 4, name: "Charitable Donations", status: "missing" }
+    { id: 4, name: "Charitable Donations", status: "missing" },
   ]);
-
-  // Calculate days remaining until tax deadline
-  const daysRemaining = calculateDaysRemaining(taxDeadline);
-
-  // Update missing document status
-  const updateDocStatus = (docId, newStatus) => {
-    setMissingDocs(prev =>
-      prev.map(doc => doc.id === docId ? { ...doc, status: newStatus } : doc)
-    );
-
-    toast({
-      title: "Document status updated",
-      description: "The document status has been updated successfully."
-    });
-  };
-
-  // Track e-file status
   const [eFileStatus, setEFileStatus] = useState({
-    status: "not_started", // not_started, submitted, accepted, rejected
-    submissionDate: null,
-    rejectionReason: null
+    status: "not_started",
+    submissionDate: null as string | null,
+    rejectionReason: null as string | null,
   });
 
-  // Handle e-file status change
-  const handleEFileStatusChange = (status) => {
-    setEFileStatus({
-      ...eFileStatus,
-      status,
-      submissionDate: status === "submitted" ? new Date().toISOString() : eFileStatus.submissionDate
+  // Recalculate how many days until the deadline
+  const daysRemaining = calculateDaysRemaining(taxDeadline);
+
+  // Helper: builds an array of tasks for timeline
+  function mapTaxTasks(): WorkflowTask[] {
+    // Build doc tasks
+    const docTasks = missingDocs.map((doc) => ({
+      id: `doc-${doc.id}`,
+      name: doc.name,
+      deadline: taxDeadline,
+      status: doc.status === "received" ? "completed" : "pending",
+    }));
+
+    // e-file submission task
+    const eFileTask: WorkflowTask = {
+      id: "efile",
+      name: "e-File Submission",
+      deadline: taxDeadline,
+      status:
+        eFileStatus.status === "accepted"
+          ? "completed"
+          : eFileStatus.status === "rejected"
+          ? "blocked"
+          : eFileStatus.status === "submitted"
+          ? "in_progress"
+          : "pending",
+    };
+    return [...docTasks, eFileTask];
+  }
+
+  // Call onTasksChange at the top level with useEffect
+  useEffect(() => {
+    const tasks = mapTaxTasks();
+    onTasksChange?.(tasks);
+  }, [missingDocs, eFileStatus, taxDeadline, onTasksChange]);
+
+  // Updates the doc status
+  const updateDocStatus = (docId: number, newStatus: string) => {
+    setMissingDocs((prev) =>
+      prev.map((doc) => (doc.id === docId ? { ...doc, status: newStatus } : doc))
+    );
+    toast({
+      title: "Document status updated",
+      description: "The document status has been updated successfully.",
     });
   };
 
-  // Handle rejection reason
-  const handleRejectionReason = (reason) => {
-    setEFileStatus({
-      ...eFileStatus,
-      rejectionReason: reason
-    });
+  // E-file submission changes
+  const handleEFileStatusChange = (status: string) => {
+    setEFileStatus((prev) => ({
+      ...prev,
+      status,
+      submissionDate: status === "submitted" ? new Date().toISOString() : prev.submissionDate,
+    }));
+  };
+  const handleRejectionReason = (reason: string) => {
+    setEFileStatus((prev) => ({
+      ...prev,
+      rejectionReason: reason,
+    }));
   };
 
   return (
     <div className="space-y-6">
-      {/* Tax deadline countdown */}
+      {/* Tax Workflow Timeline */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <FileCheck className="h-5 w-5 text-primary" />
+            Tax Workflow Progress
+          </CardTitle>
+          <CardDescription>
+            Progress based on missing docs + e-file statuses
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <UnifiedProjectTimeline projectStatus={returnStatus} tasks={mapTaxTasks()} />
+        </CardContent>
+      </Card>
+
+      {/* Tax Deadline Countdown */}
       <Card className="border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-900/20">
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center">
@@ -143,11 +257,11 @@ const TaxReturnView = ({ project, onUpdateStatus }) => {
             </div>
 
             <Progress
-              value={Math.max(0, 100 - (daysRemaining / 120) * 100)}
+              value={Math.max(0, 100 - (daysRemaining! / 120) * 100)}
               className="h-2 bg-blue-100 dark:bg-blue-900"
             />
 
-            {daysRemaining < 30 && (
+            {daysRemaining !== null && daysRemaining < 30 && (
               <div className="flex items-center text-amber-600 dark:text-amber-400 text-sm mt-2">
                 <AlertCircle className="h-4 w-4 mr-1" />
                 <span>Less than 30 days remaining until the deadline!</span>
@@ -157,7 +271,7 @@ const TaxReturnView = ({ project, onUpdateStatus }) => {
         </CardContent>
       </Card>
 
-      {/* Return status board */}
+      {/* Return Status Board */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center">
@@ -171,18 +285,14 @@ const TaxReturnView = ({ project, onUpdateStatus }) => {
             <div className="flex justify-between items-center">
               <div className="flex flex-col">
                 <span className="text-sm font-medium">Current Status</span>
-                <Badge className="w-fit mt-1">
-                  {returnStatus}
-                </Badge>
+                <Badge className="w-fit mt-1">{returnStatus}</Badge>
               </div>
 
               <Select
                 value={returnStatus}
                 onValueChange={(value) => {
                   setReturnStatus(value);
-                  if (onUpdateStatus) {
-                    onUpdateStatus(value);
-                  }
+                  onUpdateStatus(value);
                 }}
               >
                 <SelectTrigger className="w-[180px]">
@@ -208,8 +318,14 @@ const TaxReturnView = ({ project, onUpdateStatus }) => {
               <div className="relative">
                 <div className="absolute left-0 top-1/2 h-0.5 w-full bg-muted -translate-y-1/2" />
                 <div className="relative flex justify-between">
-                  {["Not Started", "Docs Received", "In Preparation", "In Review", "Filed"].map((status, index) => {
-                    const statusMap = {
+                  {[
+                    "Not Started",
+                    "Docs Received",
+                    "In Preparation",
+                    "In Review",
+                    "Filed",
+                  ].map((status, index) => {
+                    const statusMap: Record<string, number> = {
                       "Not Started": 0,
                       "Docs Requested": 1,
                       "Docs Received": 2,
@@ -217,7 +333,7 @@ const TaxReturnView = ({ project, onUpdateStatus }) => {
                       "In Review": 4,
                       "Ready for Filing": 5,
                       "Filed": 6,
-                      "Completed": 7
+                      "Completed": 7,
                     };
 
                     const currentIndex = statusMap[returnStatus] || 0;
@@ -229,10 +345,11 @@ const TaxReturnView = ({ project, onUpdateStatus }) => {
                       <div key={status} className="flex flex-col items-center">
                         <div
                           className={`h-6 w-6 rounded-full flex items-center justify-center z-10
-                            ${isActive 
-                              ? "bg-primary text-primary-foreground" 
-                              : isCompleted 
-                                ? "bg-primary/80 text-primary-foreground" 
+                            ${
+                              isActive
+                                ? "bg-primary text-primary-foreground"
+                                : isCompleted
+                                ? "bg-primary/80 text-primary-foreground"
                                 : "bg-muted text-muted-foreground"
                             }`}
                         >
@@ -242,7 +359,11 @@ const TaxReturnView = ({ project, onUpdateStatus }) => {
                             <span className="text-xs">{index + 1}</span>
                           )}
                         </div>
-                        <span className={`mt-2 text-xs max-w-[70px] text-center ${isActive ? "font-semibold" : ""}`}>
+                        <span
+                          className={`mt-2 text-xs max-w-[70px] text-center ${
+                            isActive ? "font-semibold" : ""
+                          }`}
+                        >
                           {status}
                         </span>
                       </div>
@@ -255,7 +376,7 @@ const TaxReturnView = ({ project, onUpdateStatus }) => {
         </CardContent>
       </Card>
 
-      {/* Missing document tracker */}
+      {/* Missing Document Tracker */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center">
@@ -279,11 +400,14 @@ const TaxReturnView = ({ project, onUpdateStatus }) => {
                   <TableRow key={doc.id}>
                     <TableCell className="font-medium">{doc.name}</TableCell>
                     <TableCell>
-                      <Badge variant={doc.status === "received" ? "default" : "outline"} className={
-                        doc.status === "received"
-                          ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
-                          : "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400"
-                      }>
+                      <Badge
+                        variant={doc.status === "received" ? "default" : "outline"}
+                        className={
+                          doc.status === "received"
+                            ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
+                            : "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400"
+                        }
+                      >
                         {doc.status === "received" ? "Received" : "Missing"}
                       </Badge>
                     </TableCell>
@@ -291,7 +415,12 @@ const TaxReturnView = ({ project, onUpdateStatus }) => {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => updateDocStatus(doc.id, doc.status === "received" ? "missing" : "received")}
+                        onClick={() =>
+                          updateDocStatus(
+                            doc.id,
+                            doc.status === "received" ? "missing" : "received"
+                          )
+                        }
                       >
                         {doc.status === "received" ? "Mark Missing" : "Mark Received"}
                       </Button>
@@ -309,7 +438,7 @@ const TaxReturnView = ({ project, onUpdateStatus }) => {
         </CardContent>
       </Card>
 
-      {/* e-File status tracking */}
+      {/* e-File Status Tracking */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center">
@@ -325,7 +454,11 @@ const TaxReturnView = ({ project, onUpdateStatus }) => {
               <Select
                 value={eFileStatus.status}
                 onValueChange={handleEFileStatusChange}
-                disabled={returnStatus !== "Ready for Filing" && returnStatus !== "Filed" && eFileStatus.status === "not_started"}
+                disabled={
+                  returnStatus !== "Ready for Filing" &&
+                  returnStatus !== "Filed" &&
+                  eFileStatus.status === "not_started"
+                }
               >
                 <SelectTrigger id="efile-status">
                   <SelectValue placeholder="Select status" />
@@ -342,7 +475,9 @@ const TaxReturnView = ({ project, onUpdateStatus }) => {
             {eFileStatus.submissionDate && (
               <div>
                 <Label className="text-sm text-muted-foreground">Submission Date</Label>
-                <p className="font-medium">{format(new Date(eFileStatus.submissionDate), "MMMM d, yyyy")}</p>
+                <p className="font-medium">
+                  {format(new Date(eFileStatus.submissionDate), "MMMM d, yyyy")}
+                </p>
               </div>
             )}
 
@@ -360,7 +495,9 @@ const TaxReturnView = ({ project, onUpdateStatus }) => {
                   <div className="flex items-start">
                     <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-500 mr-2 mt-0.5" />
                     <div>
-                      <p className="font-medium text-amber-800 dark:text-amber-400">Rejection Detected</p>
+                      <p className="font-medium text-amber-800 dark:text-amber-400">
+                        Rejection Detected
+                      </p>
                       <p className="text-sm text-amber-700 dark:text-amber-500">
                         Your e-File submission was rejected. Please fix the issues and resubmit.
                       </p>
@@ -390,31 +527,38 @@ const TaxReturnView = ({ project, onUpdateStatus }) => {
   );
 };
 
-// Audit View - Specialized for audit workflow
-const AuditView = ({ project, onUpdateStatus }) => {
+/* --------------------------------------------------------------------------
+   AUDIT VIEW
+-------------------------------------------------------------------------- */
+type AuditViewProps = {
+  project: Project;
+  onUpdateStatus: (s: string) => void;
+  onTasksChange?: (tasks: WorkflowTask[]) => void;
+};
+
+const AuditView: React.FC<AuditViewProps> = ({ project, onUpdateStatus, onTasksChange }) => {
   const { toast } = useToast();
   const [auditStatus, setAuditStatus] = useState(project?.status || "Planning");
   const [riskAssessment, setRiskAssessment] = useState({
     financialStatementRisk: "medium",
     internalControlRisk: "high",
     fraudRisk: "low",
-    overallRisk: "medium"
+    overallRisk: "medium",
   });
 
-  // PBC (Provided by Client) list management
+  // PBC items
   const [pbcItems, setPbcItems] = useState([
     { id: 1, item: "Trial Balance", status: "received", dueDate: "2025-05-15" },
     { id: 2, item: "Bank Statements", status: "received", dueDate: "2025-05-15" },
     { id: 3, item: "AR Aging", status: "pending", dueDate: "2025-05-20" },
     { id: 4, item: "Inventory Listing", status: "pending", dueDate: "2025-05-20" },
-    { id: 5, item: "Fixed Asset Register", status: "pending", dueDate: "2025-05-25" }
+    { id: 5, item: "Fixed Asset Register", status: "pending", dueDate: "2025-05-25" },
   ]);
 
-  // Sampling methodology
   const [samplingMethod, setSamplingMethod] = useState("statistical");
   const [sampleSize, setSampleSize] = useState(25);
 
-  // Audit findings
+  // Findings
   const [findings, setFindings] = useState([
     {
       id: 1,
@@ -422,7 +566,7 @@ const AuditView = ({ project, onUpdateStatus }) => {
       severity: "medium",
       status: "open",
       managementResponse: "",
-      remediation: ""
+      remediation: "",
     },
     {
       id: 2,
@@ -430,65 +574,80 @@ const AuditView = ({ project, onUpdateStatus }) => {
       severity: "high",
       status: "open",
       managementResponse: "",
-      remediation: ""
-    }
+      remediation: "",
+    },
   ]);
 
-  // Update PBC item status
-  const updatePbcStatus = (itemId, newStatus) => {
-    setPbcItems(prev =>
-      prev.map(item => item.id === itemId ? { ...item, status: newStatus } : item)
+  // PBC item status
+  const updatePbcStatus = (itemId: number, newStatus: string) => {
+    setPbcItems((prev) =>
+      prev.map((item) => (item.id === itemId ? { ...item, status: newStatus } : item))
     );
-
     toast({
       title: "PBC item updated",
-      description: "The PBC item status has been updated successfully."
+      description: "The PBC item status has been updated successfully.",
     });
   };
 
-  // Add new finding
-  const addFinding = (finding) => {
-    setFindings(prev => [...prev, {
-      id: prev.length + 1,
-      ...finding,
-      status: "open"
-    }]);
-
-    toast({
-      title: "Finding added",
-      description: "A new audit finding has been added successfully."
-    });
-  };
-
-  // Update finding status
-  const updateFindingStatus = (findingId, newStatus) => {
-    setFindings(prev =>
-      prev.map(finding => finding.id === findingId ? { ...finding, status: newStatus } : finding)
+  // Finding status
+  const updateFindingStatus = (findingId: number, newStatus: string) => {
+    setFindings((prev) =>
+      prev.map((f) => (f.id === findingId ? { ...f, status: newStatus } : f))
     );
-
     toast({
       title: "Finding updated",
-      description: "The finding status has been updated successfully."
+      description: "The finding status has been updated successfully.",
     });
   };
 
-  // Calculate days until due for PBC items
-  const getDaysUntilDue = (dueDate) => {
-    return calculateDaysRemaining(dueDate);
-  };
+  // Convert PBC + Findings to tasks
+  function mapAuditTasks(): WorkflowTask[] {
+    const pbcTasks = pbcItems.map((pbc) => ({
+      id: `pbc-${pbc.id}`,
+      name: pbc.item,
+      deadline: pbc.dueDate,
+      status: pbc.status === "received" ? "completed" : "pending",
+    }));
+    const findingTasks = findings.map((f) => ({
+      id: `finding-${f.id}`,
+      name: f.description,
+      deadline: undefined,
+      status: f.status === "open" ? "in_progress" : "completed",
+    }));
+    return [...pbcTasks, ...findingTasks];
+  }
 
-  // Audit timeline / Gantt chart data
+  // Fire onTasksChange at top-level
+  useEffect(() => {
+    onTasksChange?.(mapAuditTasks());
+  }, [pbcItems, findings, onTasksChange]);
+
+  // Dummy timeline data
   const timelineData = [
     { id: 1, task: "Planning", start: "2025-05-01", end: "2025-05-15", status: "completed" },
     { id: 2, task: "Risk Assessment", start: "2025-05-10", end: "2025-05-25", status: "in_progress" },
     { id: 3, task: "Fieldwork", start: "2025-05-20", end: "2025-06-15", status: "pending" },
     { id: 4, task: "Draft Report", start: "2025-06-15", end: "2025-06-30", status: "pending" },
     { id: 5, task: "Review", start: "2025-07-01", end: "2025-07-15", status: "pending" },
-    { id: 6, task: "Final Report", start: "2025-07-15", end: "2025-07-31", status: "pending" }
+    { id: 6, task: "Final Report", start: "2025-07-15", end: "2025-07-31", status: "pending" },
   ];
 
   return (
     <div className="space-y-6">
+      {/* Audit Workflow Timeline */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <CalendarIcon className="h-5 w-5 text-primary" />
+            Audit Workflow Progress
+          </CardTitle>
+          <CardDescription>PBC items + open findings as tasks</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <UnifiedProjectTimeline projectStatus={auditStatus} tasks={mapAuditTasks()} />
+        </CardContent>
+      </Card>
+
       {/* Audit Timeline (Gantt Chart) */}
       <Card>
         <CardHeader>
@@ -505,7 +664,6 @@ const AuditView = ({ project, onUpdateStatus }) => {
               const endDate = new Date(item.end);
               const today = new Date();
 
-              // Calculate position and width for the timeline bar
               const startPos = new Date("2025-05-01");
               const endPos = new Date("2025-08-01");
               const totalDays = differenceInDays(endPos, startPos);
@@ -513,7 +671,6 @@ const AuditView = ({ project, onUpdateStatus }) => {
               const leftPos = (differenceInDays(startDate, startPos) / totalDays) * 100;
               const widthPerc = (differenceInDays(endDate, startDate) / totalDays) * 100;
 
-              // Determine status styling
               let statusColor = "bg-muted";
               if (item.status === "completed") {
                 statusColor = "bg-green-500";
@@ -537,7 +694,7 @@ const AuditView = ({ project, onUpdateStatus }) => {
                       className={`absolute h-full rounded-sm ${statusColor}`}
                       style={{
                         left: `${leftPos}%`,
-                        width: `${widthPerc}%`
+                        width: `${widthPerc}%`,
                       }}
                     ></div>
 
@@ -546,7 +703,7 @@ const AuditView = ({ project, onUpdateStatus }) => {
                       <div
                         className="absolute w-0.5 h-full bg-red-500"
                         style={{
-                          left: `${(differenceInDays(today, startPos) / totalDays) * 100}%`
+                          left: `${(differenceInDays(today, startPos) / totalDays) * 100}%`,
                         }}
                       ></div>
                     )}
@@ -581,7 +738,12 @@ const AuditView = ({ project, onUpdateStatus }) => {
                 <Label>Financial Statement Risk</Label>
                 <Select
                   value={riskAssessment.financialStatementRisk}
-                  onValueChange={(value) => setRiskAssessment(prev => ({ ...prev, financialStatementRisk: value }))}
+                  onValueChange={(value) =>
+                    setRiskAssessment((prev) => ({
+                      ...prev,
+                      financialStatementRisk: value,
+                    }))
+                  }
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select risk level" />
@@ -598,7 +760,12 @@ const AuditView = ({ project, onUpdateStatus }) => {
                 <Label>Internal Control Risk</Label>
                 <Select
                   value={riskAssessment.internalControlRisk}
-                  onValueChange={(value) => setRiskAssessment(prev => ({ ...prev, internalControlRisk: value }))}
+                  onValueChange={(value) =>
+                    setRiskAssessment((prev) => ({
+                      ...prev,
+                      internalControlRisk: value,
+                    }))
+                  }
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select risk level" />
@@ -615,7 +782,9 @@ const AuditView = ({ project, onUpdateStatus }) => {
                 <Label>Fraud Risk</Label>
                 <Select
                   value={riskAssessment.fraudRisk}
-                  onValueChange={(value) => setRiskAssessment(prev => ({ ...prev, fraudRisk: value }))}
+                  onValueChange={(value) =>
+                    setRiskAssessment((prev) => ({ ...prev, fraudRisk: value }))
+                  }
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select risk level" />
@@ -632,7 +801,9 @@ const AuditView = ({ project, onUpdateStatus }) => {
                 <Label>Overall Risk Assessment</Label>
                 <Select
                   value={riskAssessment.overallRisk}
-                  onValueChange={(value) => setRiskAssessment(prev => ({ ...prev, overallRisk: value }))}
+                  onValueChange={(value) =>
+                    setRiskAssessment((prev) => ({ ...prev, overallRisk: value }))
+                  }
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select risk level" />
@@ -650,7 +821,9 @@ const AuditView = ({ project, onUpdateStatus }) => {
               <div className="flex items-start">
                 <HelpCircle className="h-5 w-5 text-blue-600 dark:text-blue-500 mr-2 mt-0.5" />
                 <div>
-                  <p className="font-medium text-blue-800 dark:text-blue-400">Risk Assessment Impact</p>
+                  <p className="font-medium text-blue-800 dark:text-blue-400">
+                    Risk Assessment Impact
+                  </p>
                   <p className="text-sm text-blue-700 dark:text-blue-500">
                     Your risk assessment determines the scope and focus of the audit procedures.
                     Higher risk areas require more extensive testing.
@@ -684,36 +857,44 @@ const AuditView = ({ project, onUpdateStatus }) => {
               </TableHeader>
               <TableBody>
                 {pbcItems.map((item) => {
-                  const daysUntilDue = getDaysUntilDue(item.dueDate);
+                  const daysUntilDue = calculateDaysRemaining(item.dueDate);
 
                   return (
                     <TableRow key={item.id}>
                       <TableCell className="font-medium">{item.item}</TableCell>
                       <TableCell>
-                        <Badge variant={item.status === "received" ? "default" : "outline"} className={
-                          item.status === "received"
-                            ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
-                            : "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400"
-                        }>
+                        <Badge
+                          variant={item.status === "received" ? "default" : "outline"}
+                          className={
+                            item.status === "received"
+                              ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
+                              : "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400"
+                          }
+                        >
                           {item.status === "received" ? "Received" : "Pending"}
                         </Badge>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center">
-                          <span className={
-                            item.status === "received"
-                              ? "text-muted-foreground"
-                              : daysUntilDue < 0
+                          <span
+                            className={
+                              item.status === "received"
+                                ? "text-muted-foreground"
+                                : daysUntilDue !== null && daysUntilDue < 0
                                 ? "text-red-600 dark:text-red-400"
-                                : daysUntilDue < 5
-                                  ? "text-amber-600 dark:text-amber-400"
-                                  : ""
-                          }>
+                                : daysUntilDue !== null && daysUntilDue < 5
+                                ? "text-amber-600 dark:text-amber-400"
+                                : ""
+                            }
+                          >
                             {format(new Date(item.dueDate), "MMM d, yyyy")}
                           </span>
 
-                          {item.status !== "received" && daysUntilDue < 0 && (
-                            <Badge variant="outline" className="ml-2 bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">
+                          {item.status !== "received" && daysUntilDue !== null && daysUntilDue < 0 && (
+                            <Badge
+                              variant="outline"
+                              className="ml-2 bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
+                            >
                               Overdue
                             </Badge>
                           )}
@@ -723,7 +904,12 @@ const AuditView = ({ project, onUpdateStatus }) => {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => updatePbcStatus(item.id, item.status === "received" ? "pending" : "received")}
+                          onClick={() =>
+                            updatePbcStatus(
+                              item.id,
+                              item.status === "received" ? "pending" : "received"
+                            )
+                          }
                         >
                           {item.status === "received" ? "Mark Pending" : "Mark Received"}
                         </Button>
@@ -742,7 +928,7 @@ const AuditView = ({ project, onUpdateStatus }) => {
         </CardContent>
       </Card>
 
-      {/* Sampling Methodology Documentation */}
+      {/* Sampling Methodology */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center">
@@ -788,10 +974,14 @@ const AuditView = ({ project, onUpdateStatus }) => {
             <div className="p-3 rounded-md bg-muted">
               <h4 className="text-sm font-medium mb-1">Sampling Method Description</h4>
               <p className="text-sm text-muted-foreground">
-                {samplingMethod === "statistical" && "Statistical sampling uses probability theory to select and evaluate audit evidence. This provides a mathematical basis for drawing conclusions about the population."}
-                {samplingMethod === "judgmental" && "Judgmental sampling relies on the auditor's professional judgment to select items for testing. This is used when statistical methods aren't appropriate."}
-                {samplingMethod === "random" && "Random sampling gives every item in the population an equal chance of selection. This helps ensure an unbiased sample."}
-                {samplingMethod === "systematic" && "Systematic sampling selects items using a fixed interval after selecting a starting point at random. This creates an evenly distributed sample."}
+                {samplingMethod === "statistical" &&
+                  "Statistical sampling uses probability theory to select and evaluate audit evidence. This provides a mathematical basis for drawing conclusions about the population."}
+                {samplingMethod === "judgmental" &&
+                  "Judgmental sampling relies on the auditor's professional judgment to select items for testing. This is used when statistical methods aren't appropriate."}
+                {samplingMethod === "random" &&
+                  "Random sampling gives every item in the population an equal chance of selection. This helps ensure an unbiased sample."}
+                {samplingMethod === "systematic" &&
+                  "Systematic sampling selects items using a fixed interval after selecting a starting point at random. This creates an evenly distributed sample."}
               </p>
             </div>
 
@@ -826,13 +1016,15 @@ const AuditView = ({ project, onUpdateStatus }) => {
               <div key={finding.id} className="border rounded-lg p-4 space-y-3">
                 <div className="flex justify-between">
                   <div className="flex items-center">
-                    <Badge className={
-                      finding.severity === "high"
-                        ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
-                        : finding.severity === "medium"
+                    <Badge
+                      className={
+                        finding.severity === "high"
+                          ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
+                          : finding.severity === "medium"
                           ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400"
                           : "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400"
-                    }>
+                      }
+                    >
                       {finding.severity.charAt(0).toUpperCase() + finding.severity.slice(1)} Severity
                     </Badge>
 
@@ -843,7 +1035,12 @@ const AuditView = ({ project, onUpdateStatus }) => {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => updateFindingStatus(finding.id, finding.status === "open" ? "closed" : "open")}
+                    onClick={() =>
+                      updateFindingStatus(
+                        finding.id,
+                        finding.status === "open" ? "closed" : "open"
+                      )
+                    }
                   >
                     {finding.status === "open" ? "Close Finding" : "Reopen Finding"}
                   </Button>
@@ -853,15 +1050,21 @@ const AuditView = ({ project, onUpdateStatus }) => {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor={`management-response-${finding.id}`}>Management Response</Label>
+                    <Label htmlFor={`management-response-${finding.id}`}>
+                      Management Response
+                    </Label>
                     <Input
                       id={`management-response-${finding.id}`}
                       value={finding.managementResponse}
-                      onChange={(e) => {
-                        setFindings(prev =>
-                          prev.map(f => f.id === finding.id ? { ...f, managementResponse: e.target.value } : f)
-                        );
-                      }}
+                      onChange={(e) =>
+                        setFindings((prev) =>
+                          prev.map((f) =>
+                            f.id === finding.id
+                              ? { ...f, managementResponse: e.target.value }
+                              : f
+                          )
+                        )
+                      }
                       placeholder="Enter management response"
                     />
                   </div>
@@ -871,11 +1074,15 @@ const AuditView = ({ project, onUpdateStatus }) => {
                     <Input
                       id={`remediation-${finding.id}`}
                       value={finding.remediation}
-                      onChange={(e) => {
-                        setFindings(prev =>
-                          prev.map(f => f.id === finding.id ? { ...f, remediation: e.target.value } : f)
-                        );
-                      }}
+                      onChange={(e) =>
+                        setFindings((prev) =>
+                          prev.map((f) =>
+                            f.id === finding.id
+                              ? { ...f, remediation: e.target.value }
+                              : f
+                          )
+                        )
+                      }
                       placeholder="Enter remediation status"
                     />
                   </div>
@@ -895,58 +1102,90 @@ const AuditView = ({ project, onUpdateStatus }) => {
   );
 };
 
-// Client Accounting Services View - Specialized for CAS workflow
-const CASView = ({ project, onUpdateStatus }) => {
+/* --------------------------------------------------------------------------
+   CAS (Client Accounting Services) VIEW
+-------------------------------------------------------------------------- */
+type CASViewProps = {
+  project: Project;
+  onUpdateStatus: (s: string) => void;
+  onTasksChange?: (tasks: WorkflowTask[]) => void;
+};
+
+const CASView: React.FC<CASViewProps> = ({ project, onUpdateStatus, onTasksChange }) => {
   const { toast } = useToast();
   const [casStatus, setCasStatus] = useState(project?.status || "Onboarding");
 
-  // Recurring services tracking
   const [recurringServices, setRecurringServices] = useState([
-    { id: 1, service: "Bank Reconciliation", frequency: "monthly", lastCompleted: "2025-03-31", nextDue: "2025-04-30", status: "upcoming" },
-    { id: 2, service: "Financial Statements", frequency: "monthly", lastCompleted: "2025-03-31", nextDue: "2025-04-30", status: "upcoming" },
-    { id: 3, service: "Sales Tax Filing", frequency: "quarterly", lastCompleted: "2025-03-31", nextDue: "2025-06-30", status: "upcoming" },
-    { id: 4, service: "Payroll Processing", frequency: "bi-weekly", lastCompleted: "2025-04-15", nextDue: "2025-04-30", status: "upcoming" }
+    {
+      id: 1,
+      service: "Bank Reconciliation",
+      frequency: "monthly",
+      lastCompleted: "2025-03-31",
+      nextDue: "2025-04-30",
+      status: "upcoming",
+    },
+    {
+      id: 2,
+      service: "Financial Statements",
+      frequency: "monthly",
+      lastCompleted: "2025-03-31",
+      nextDue: "2025-04-30",
+      status: "upcoming",
+    },
+    {
+      id: 3,
+      service: "Sales Tax Filing",
+      frequency: "quarterly",
+      lastCompleted: "2025-03-31",
+      nextDue: "2025-06-30",
+      status: "upcoming",
+    },
+    {
+      id: 4,
+      service: "Payroll Processing",
+      frequency: "bi-weekly",
+      lastCompleted: "2025-04-15",
+      nextDue: "2025-04-30",
+      status: "upcoming",
+    },
   ]);
 
-  // Financial metrics tracking
   const [financialMetrics, setFinancialMetrics] = useState({
     revenue: {
       current: 125000,
       previous: 110000,
-      change: 13.6
+      change: 13.6,
     },
     expenses: {
       current: 95000,
       previous: 90000,
-      change: 5.6
+      change: 5.6,
     },
     profit: {
       current: 30000,
       previous: 20000,
-      change: 50
+      change: 50,
     },
     cash: {
       current: 85000,
       previous: 75000,
-      change: 13.3
-    }
+      change: 13.3,
+    },
   });
 
-  // Financial statement generator options
   const [statementOptions, setStatementOptions] = useState({
     includeBalanceSheet: true,
     includeIncomeStatement: true,
     includeCashFlow: true,
     includeNotes: false,
-    periodEnd: format(new Date(), "yyyy-MM-dd")
+    periodEnd: format(new Date(), "yyyy-MM-dd"),
   });
 
   // Mark service as completed
-  const markServiceCompleted = (serviceId) => {
-    setRecurringServices(prev =>
-      prev.map(service => {
+  const markServiceCompleted = (serviceId: number) => {
+    setRecurringServices((prev) =>
+      prev.map((service) => {
         if (service.id === serviceId) {
-          // Calculate next due date based on frequency
           let nextDue = new Date();
           if (service.frequency === "monthly") {
             nextDue.setMonth(nextDue.getMonth() + 1);
@@ -955,12 +1194,11 @@ const CASView = ({ project, onUpdateStatus }) => {
           } else if (service.frequency === "bi-weekly") {
             nextDue.setDate(nextDue.getDate() + 14);
           }
-
           return {
             ...service,
             lastCompleted: format(new Date(), "yyyy-MM-dd"),
             nextDue: format(nextDue, "yyyy-MM-dd"),
-            status: "completed"
+            status: "completed",
           };
         }
         return service;
@@ -969,32 +1207,65 @@ const CASView = ({ project, onUpdateStatus }) => {
 
     toast({
       title: "Service marked as completed",
-      description: "Service has been marked as completed and next due date updated."
+      description: "Service has been marked as completed and next due date updated.",
     });
   };
 
-  // Generate financial statements
   const generateStatements = () => {
     toast({
       title: "Generating financial statements",
-      description: "Financial statements are being generated. They will be available shortly."
+      description: "Financial statements are being generated. They will be available shortly.",
     });
 
     setTimeout(() => {
       toast({
         title: "Financial statements ready",
-        description: "Financial statements have been generated successfully."
+        description: "Financial statements have been generated successfully.",
       });
     }, 2000);
   };
 
-  // Calculate days until due
-  const getDaysUntilDue = (dueDate) => {
-    return calculateDaysRemaining(dueDate);
-  };
+  // Build tasks from recurring services
+  function mapCasTasks(): WorkflowTask[] {
+    return recurringServices.map((svc) => {
+      let status: "pending" | "in_progress" | "blocked" | "completed" = "pending";
+      if (svc.status === "completed") {
+        status = "completed";
+      } else if (svc.status === "upcoming") {
+        // interpret "upcoming" as "in_progress" or "pending"
+        status = "in_progress";
+      }
+      return {
+        id: `cas-svc-${svc.id}`,
+        name: svc.service,
+        deadline: svc.nextDue,
+        status,
+      };
+    });
+  }
+
+  // Fire onTasksChange at top-level
+  useEffect(() => {
+    const tasks = mapCasTasks();
+    onTasksChange?.(tasks);
+  }, [recurringServices, onTasksChange]);
 
   return (
     <div className="space-y-6">
+      {/* CAS Workflow Timeline */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <RefreshCw className="h-5 w-5 text-primary" />
+            CAS Workflow Progress
+          </CardTitle>
+          <CardDescription>Recurring services as tasks</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <UnifiedProjectTimeline projectStatus={casStatus} tasks={mapCasTasks()} />
+        </CardContent>
+      </Card>
+
       {/* Recurring Services Dashboard */}
       <Card>
         <CardHeader>
@@ -1018,33 +1289,42 @@ const CASView = ({ project, onUpdateStatus }) => {
               </TableHeader>
               <TableBody>
                 {recurringServices.map((service) => {
-                  const daysUntilDue = getDaysUntilDue(service.nextDue);
-
+                  const daysUntilDue = calculateDaysRemaining(service.nextDue);
                   return (
                     <TableRow key={service.id}>
                       <TableCell className="font-medium">{service.service}</TableCell>
                       <TableCell className="capitalize">{service.frequency}</TableCell>
-                      <TableCell>{format(new Date(service.lastCompleted), "MMM d, yyyy")}</TableCell>
+                      <TableCell>
+                        {format(new Date(service.lastCompleted), "MMM d, yyyy")}
+                      </TableCell>
                       <TableCell>
                         <div className="flex items-center">
-                          <span className={
-                            daysUntilDue < 0
-                              ? "text-red-600 dark:text-red-400"
-                              : daysUntilDue < 5
+                          <span
+                            className={
+                              daysUntilDue !== null && daysUntilDue < 0
+                                ? "text-red-600 dark:text-red-400"
+                                : daysUntilDue !== null && daysUntilDue < 5
                                 ? "text-amber-600 dark:text-amber-400"
                                 : ""
-                          }>
+                            }
+                          >
                             {format(new Date(service.nextDue), "MMM d, yyyy")}
                           </span>
 
-                          {daysUntilDue < 0 && (
-                            <Badge variant="outline" className="ml-2 bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">
+                          {daysUntilDue !== null && daysUntilDue < 0 && (
+                            <Badge
+                              variant="outline"
+                              className="ml-2 bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
+                            >
                               Overdue
                             </Badge>
                           )}
 
-                          {daysUntilDue >= 0 && daysUntilDue < 5 && (
-                            <Badge variant="outline" className="ml-2 bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+                          {daysUntilDue !== null && daysUntilDue >= 0 && daysUntilDue < 5 && (
+                            <Badge
+                              variant="outline"
+                              className="ml-2 bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400"
+                            >
                               Due Soon
                             </Badge>
                           )}
@@ -1073,7 +1353,7 @@ const CASView = ({ project, onUpdateStatus }) => {
         </CardContent>
       </Card>
 
-      {/* Financial Metrics Card */}
+      {/* Financial Metrics */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center">
@@ -1089,9 +1369,7 @@ const CASView = ({ project, onUpdateStatus }) => {
                 <CardContent className="p-4">
                   <div className="space-y-1">
                     <p className="text-sm text-muted-foreground capitalize">{key}</p>
-                    <p className="text-2xl font-bold">
-                      ${data.current.toLocaleString()}
-                    </p>
+                    <p className="text-2xl font-bold">${data.current.toLocaleString()}</p>
                     <div className="flex items-center text-xs">
                       {data.change >= 0 ? (
                         <ArrowUpRight className="h-3 w-3 text-green-500 mr-1" />
@@ -1099,11 +1377,10 @@ const CASView = ({ project, onUpdateStatus }) => {
                         <ArrowDownRight className="h-3 w-3 text-red-500 mr-1" />
                       )}
                       <span className={data.change >= 0 ? "text-green-600" : "text-red-600"}>
-                        {data.change >= 0 ? "+" : ""}{data.change}%
+                        {data.change >= 0 ? "+" : ""}
+                        {data.change}%
                       </span>
-                      <span className="text-muted-foreground ml-1">
-                        vs previous
-                      </span>
+                      <span className="text-muted-foreground ml-1">vs previous</span>
                     </div>
                   </div>
                 </CardContent>
@@ -1131,10 +1408,12 @@ const CASView = ({ project, onUpdateStatus }) => {
                     id="balance-sheet"
                     checked={statementOptions.includeBalanceSheet}
                     onCheckedChange={(checked) =>
-                      setStatementOptions(prev => ({ ...prev, includeBalanceSheet: !!checked }))
+                      setStatementOptions((prev) => ({ ...prev, includeBalanceSheet: !!checked }))
                     }
                   />
-                  <Label htmlFor="balance-sheet" className="cursor-pointer">Balance Sheet</Label>
+                  <Label htmlFor="balance-sheet" className="cursor-pointer">
+                    Balance Sheet
+                  </Label>
                 </div>
 
                 <div className="flex items-center space-x-2">
@@ -1142,10 +1421,15 @@ const CASView = ({ project, onUpdateStatus }) => {
                     id="income-statement"
                     checked={statementOptions.includeIncomeStatement}
                     onCheckedChange={(checked) =>
-                      setStatementOptions(prev => ({ ...prev, includeIncomeStatement: !!checked }))
+                      setStatementOptions((prev) => ({
+                        ...prev,
+                        includeIncomeStatement: !!checked,
+                      }))
                     }
                   />
-                  <Label htmlFor="income-statement" className="cursor-pointer">Income Statement</Label>
+                  <Label htmlFor="income-statement" className="cursor-pointer">
+                    Income Statement
+                  </Label>
                 </div>
 
                 <div className="flex items-center space-x-2">
@@ -1153,10 +1437,12 @@ const CASView = ({ project, onUpdateStatus }) => {
                     id="cash-flow"
                     checked={statementOptions.includeCashFlow}
                     onCheckedChange={(checked) =>
-                      setStatementOptions(prev => ({ ...prev, includeCashFlow: !!checked }))
+                      setStatementOptions((prev) => ({ ...prev, includeCashFlow: !!checked }))
                     }
                   />
-                  <Label htmlFor="cash-flow" className="cursor-pointer">Cash Flow</Label>
+                  <Label htmlFor="cash-flow" className="cursor-pointer">
+                    Cash Flow
+                  </Label>
                 </div>
 
                 <div className="flex items-center space-x-2">
@@ -1164,10 +1450,12 @@ const CASView = ({ project, onUpdateStatus }) => {
                     id="notes"
                     checked={statementOptions.includeNotes}
                     onCheckedChange={(checked) =>
-                      setStatementOptions(prev => ({ ...prev, includeNotes: !!checked }))
+                      setStatementOptions((prev) => ({ ...prev, includeNotes: !!checked }))
                     }
                   />
-                  <Label htmlFor="notes" className="cursor-pointer">Notes to Financials</Label>
+                  <Label htmlFor="notes" className="cursor-pointer">
+                    Notes to Financials
+                  </Label>
                 </div>
               </div>
 
@@ -1182,14 +1470,21 @@ const CASView = ({ project, onUpdateStatus }) => {
                         className="w-[240px] justify-start text-left"
                       >
                         <CalendarIcon className="mr-2 h-4 w-4" />
-                        {statementOptions.periodEnd ? format(new Date(statementOptions.periodEnd), "MMMM d, yyyy") : "Select date"}
+                        {statementOptions.periodEnd
+                          ? format(new Date(statementOptions.periodEnd), "MMMM d, yyyy")
+                          : "Select date"}
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0">
                       <Calendar
                         mode="single"
                         selected={new Date(statementOptions.periodEnd)}
-                        onSelect={(date) => setStatementOptions(prev => ({ ...prev, periodEnd: format(date, "yyyy-MM-dd") }))}
+                        onSelect={(date) =>
+                          setStatementOptions((prev) => ({
+                            ...prev,
+                            periodEnd: format(date, "yyyy-MM-dd"),
+                          }))
+                        }
                         initialFocus
                       />
                     </PopoverContent>
@@ -1211,7 +1506,11 @@ const CASView = ({ project, onUpdateStatus }) => {
 
             <Button
               onClick={generateStatements}
-              disabled={!statementOptions.includeBalanceSheet && !statementOptions.includeIncomeStatement && !statementOptions.includeCashFlow}
+              disabled={
+                !statementOptions.includeBalanceSheet &&
+                !statementOptions.includeIncomeStatement &&
+                !statementOptions.includeCashFlow
+              }
               className="gap-2 w-full"
             >
               <FileSpreadsheet className="h-4 w-4" />
@@ -1286,10 +1585,14 @@ const CASView = ({ project, onUpdateStatus }) => {
                   <TableCell>{format(new Date("2025-04-01"), "MMM d, yyyy")}</TableCell>
                   <TableCell>$1,250.00</TableCell>
                   <TableCell>
-                    <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">Paid</Badge>
+                    <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                      Paid
+                    </Badge>
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="sm">View</Button>
+                    <Button variant="ghost" size="sm">
+                      View
+                    </Button>
                   </TableCell>
                 </TableRow>
                 <TableRow>
@@ -1297,10 +1600,14 @@ const CASView = ({ project, onUpdateStatus }) => {
                   <TableCell>{format(new Date("2025-03-01"), "MMM d, yyyy")}</TableCell>
                   <TableCell>$1,250.00</TableCell>
                   <TableCell>
-                    <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">Paid</Badge>
+                    <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                      Paid
+                    </Badge>
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="sm">View</Button>
+                    <Button variant="ghost" size="sm">
+                      View
+                    </Button>
                   </TableCell>
                 </TableRow>
                 <TableRow>
@@ -1308,10 +1615,14 @@ const CASView = ({ project, onUpdateStatus }) => {
                   <TableCell>{format(new Date("2025-02-01"), "MMM d, yyyy")}</TableCell>
                   <TableCell>$1,250.00</TableCell>
                   <TableCell>
-                    <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">Paid</Badge>
+                    <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                      Paid
+                    </Badge>
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="sm">View</Button>
+                    <Button variant="ghost" size="sm">
+                      View
+                    </Button>
                   </TableCell>
                 </TableRow>
               </TableBody>
@@ -1335,37 +1646,89 @@ const CASView = ({ project, onUpdateStatus }) => {
   );
 };
 
-// Financial Planning View
-const FinancialPlanningView = ({ project, onUpdateStatus }) => {
+/* --------------------------------------------------------------------------
+   FINANCIAL PLANNING VIEW
+-------------------------------------------------------------------------- */
+type FPViewProps = {
+  project: Project;
+  onUpdateStatus: (s: string) => void;
+  onTasksChange?: (tasks: WorkflowTask[]) => void;
+};
+
+const FinancialPlanningView: React.FC<FPViewProps> = ({
+  project,
+  onUpdateStatus,
+  onTasksChange,
+}) => {
   const { toast } = useToast();
 
   const [investmentData, setInvestmentData] = useState({
     retirement: 850000,
     taxable: 350000,
     education: 125000,
-    cash: 75000
+    cash: 75000,
   });
 
   const [planningGoals, setPlanningGoals] = useState([
     { id: 1, name: "Retirement at age 65", status: "on_track", priority: "high" },
     { id: 2, name: "College funding for children", status: "at_risk", priority: "medium" },
     { id: 3, name: "Buy vacation property", status: "off_track", priority: "low" },
-    { id: 4, name: "Emergency fund (6 months)", status: "complete", priority: "high" }
+    { id: 4, name: "Emergency fund (6 months)", status: "complete", priority: "high" },
   ]);
 
-  const updateGoalStatus = (goalId, newStatus) => {
-    setPlanningGoals(prev =>
-      prev.map(goal => goal.id === goalId ? { ...goal, status: newStatus } : goal)
+  // Update a single goal
+  const updateGoalStatus = (goalId: number, newStatus: string) => {
+    setPlanningGoals((prev) =>
+      prev.map((goal) => (goal.id === goalId ? { ...goal, status: newStatus } : goal))
     );
-
     toast({
       title: "Goal status updated",
-      description: "The goal status has been updated successfully."
+      description: "The goal status has been updated successfully.",
     });
   };
 
+  // Build tasks from goals
+  function mapPlanningTasks(): WorkflowTask[] {
+    return planningGoals.map((g) => ({
+      id: `goal-${g.id}`,
+      name: g.name,
+      deadline: undefined, // no specific date
+      status:
+        g.status === "complete"
+          ? "completed"
+          : g.status === "off_track"
+          ? "blocked"
+          : g.status === "on_track"
+          ? "in_progress"
+          : "pending",
+    }));
+  }
+
+  // Fire tasks up to timeline
+  useEffect(() => {
+    const tasks = mapPlanningTasks();
+    onTasksChange?.(tasks);
+  }, [planningGoals, onTasksChange]);
+
   return (
     <div className="space-y-6">
+      {/* Financial Planning Workflow Timeline */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <BarChart3 className="h-5 w-5 text-primary" />
+            Financial Planning Workflow Progress
+          </CardTitle>
+          <CardDescription>Goals as tasks</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <UnifiedProjectTimeline
+            projectStatus={project?.status || "Planning"}
+            tasks={mapPlanningTasks()}
+          />
+        </CardContent>
+      </Card>
+
       {/* Portfolio Overview */}
       <Card>
         <CardHeader>
@@ -1383,9 +1746,7 @@ const FinancialPlanningView = ({ project, onUpdateStatus }) => {
                   <CardContent className="p-4">
                     <div className="space-y-1">
                       <p className="text-sm text-muted-foreground capitalize">{key}</p>
-                      <p className="text-2xl font-bold">
-                        ${value.toLocaleString()}
-                      </p>
+                      <p className="text-2xl font-bold">${value.toLocaleString()}</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -1396,11 +1757,16 @@ const FinancialPlanningView = ({ project, onUpdateStatus }) => {
               <div>
                 <span className="text-muted-foreground mr-1">Total Portfolio Value:</span>
                 <span className="font-medium">
-                  ${Object.values(investmentData).reduce((a, b) => a + b, 0).toLocaleString()}
+                  $
+                  {Object.values(investmentData)
+                    .reduce((a, b) => a + b, 0)
+                    .toLocaleString()}
                 </span>
               </div>
 
-              <Badge variant="outline">Last Updated: {format(new Date(), "MMM d, yyyy")}</Badge>
+              <Badge variant="outline">
+                Last Updated: {format(new Date(), "MMM d, yyyy")}
+              </Badge>
             </div>
 
             <div>
@@ -1465,29 +1831,38 @@ const FinancialPlanningView = ({ project, onUpdateStatus }) => {
                   <TableRow key={goal.id}>
                     <TableCell className="font-medium">{goal.name}</TableCell>
                     <TableCell>
-                      <Badge variant="outline" className={
-                        goal.priority === "high"
-                          ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
-                          : goal.priority === "medium"
+                      <Badge
+                        variant="outline"
+                        className={
+                          goal.priority === "high"
+                            ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
+                            : goal.priority === "medium"
                             ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400"
                             : "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400"
-                      }>
+                        }
+                      >
                         {goal.priority.charAt(0).toUpperCase() + goal.priority.slice(1)}
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge className={
-                        goal.status === "on_track"
-                          ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
-                          : goal.status === "at_risk"
+                      <Badge
+                        className={
+                          goal.status === "on_track"
+                            ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
+                            : goal.status === "at_risk"
                             ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400"
                             : goal.status === "off_track"
-                              ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
-                              : "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400"
-                      }>
-                        {goal.status === "on_track" ? "On Track" :
-                         goal.status === "at_risk" ? "At Risk" :
-                         goal.status === "off_track" ? "Off Track" : "Complete"}
+                            ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
+                            : "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400"
+                        }
+                      >
+                        {goal.status === "on_track"
+                          ? "On Track"
+                          : goal.status === "at_risk"
+                          ? "At Risk"
+                          : goal.status === "off_track"
+                          ? "Off Track"
+                          : "Complete"}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
@@ -1548,12 +1923,8 @@ const FinancialPlanningView = ({ project, onUpdateStatus }) => {
                     <p className="text-xl font-bold">$850,000</p>
                     <div className="flex items-center text-xs">
                       <ArrowUpRight className="h-3 w-3 text-green-500 mr-1" />
-                      <span className="text-green-600">
-                        +12.5%
-                      </span>
-                      <span className="text-muted-foreground ml-1">
-                        this year
-                      </span>
+                      <span className="text-green-600">+12.5%</span>
+                      <span className="text-muted-foreground ml-1">this year</span>
                     </div>
                   </div>
                 </CardContent>
@@ -1574,7 +1945,9 @@ const FinancialPlanningView = ({ project, onUpdateStatus }) => {
               <div className="flex items-start">
                 <HelpCircle className="h-5 w-5 text-blue-600 dark:text-blue-500 mr-2 mt-0.5" />
                 <div>
-                  <p className="font-medium text-blue-800 dark:text-blue-400">Retirement Planning</p>
+                  <p className="font-medium text-blue-800 dark:text-blue-400">
+                    Retirement Planning
+                  </p>
                   <p className="text-sm text-blue-700 dark:text-blue-500">
                     Based on current savings and contribution rates, the client is
                     <span className="font-medium"> 85% likely</span> to achieve their retirement goal.
@@ -1590,10 +1963,7 @@ const FinancialPlanningView = ({ project, onUpdateStatus }) => {
                   <span>Current</span>
                   <span>Estimated Needed</span>
                 </div>
-                <Progress
-                  value={60}
-                  className="h-3"
-                />
+                <Progress value={60} className="h-3" />
                 <div className="flex justify-between text-xs text-muted-foreground">
                   <span>$850,000</span>
                   <span>$1,400,000</span>
@@ -1702,53 +2072,103 @@ const FinancialPlanningView = ({ project, onUpdateStatus }) => {
   );
 };
 
-// Advisory View
-const AdvisoryView = ({ project, onUpdateStatus }) => {
+/* --------------------------------------------------------------------------
+   ADVISORY VIEW
+-------------------------------------------------------------------------- */
+type AdvisoryViewProps = {
+  project: Project;
+  onUpdateStatus: (s: string) => void;
+  onTasksChange?: (tasks: WorkflowTask[]) => void;
+};
+
+const AdvisoryView: React.FC<AdvisoryViewProps> = ({ project, onUpdateStatus, onTasksChange }) => {
   const { toast } = useToast();
 
   const [businessMetrics, setBusinessMetrics] = useState({
     revenue: {
       current: 1250000,
       previous: 980000,
-      change: 27.6
+      change: 27.6,
     },
     profit: {
       current: 300000,
       previous: 210000,
-      change: 42.9
+      change: 42.9,
     },
     employees: {
       current: 15,
       previous: 12,
-      change: 25.0
+      change: 25.0,
     },
     clients: {
       current: 45,
       previous: 38,
-      change: 18.4
-    }
+      change: 18.4,
+    },
   });
 
   const [advisoryDeliverables, setAdvisoryDeliverables] = useState([
     { id: 1, name: "Business Valuation Report", status: "completed", date: "2025-03-15" },
     { id: 2, name: "Cash Flow Projection Model", status: "in_progress", date: "2025-04-30" },
     { id: 3, name: "Strategic Growth Plan", status: "not_started", date: "2025-05-15" },
-    { id: 4, name: "Tax Planning Strategy", status: "not_started", date: "2025-06-01" }
+    { id: 4, name: "Tax Planning Strategy", status: "not_started", date: "2025-06-01" },
   ]);
 
-  const updateDeliverableStatus = (deliverableId, newStatus) => {
-    setAdvisoryDeliverables(prev =>
-      prev.map(deliverable => deliverable.id === deliverableId ? { ...deliverable, status: newStatus } : deliverable)
+  // Update deliverable status
+  const updateDeliverableStatus = (deliverableId: number, newStatus: string) => {
+    setAdvisoryDeliverables((prev) =>
+      prev.map((deliverable) =>
+        deliverable.id === deliverableId ? { ...deliverable, status: newStatus } : deliverable
+      )
     );
 
     toast({
       title: "Deliverable status updated",
-      description: "The deliverable status has been updated successfully."
+      description: "The deliverable status has been updated successfully.",
     });
   };
 
+  // Convert deliverables to tasks
+  function mapAdvisoryTasks(): WorkflowTask[] {
+    return advisoryDeliverables.map((d) => {
+      let st: "pending" | "in_progress" | "blocked" | "completed" = "pending";
+      if (d.status === "completed") st = "completed";
+      else if (d.status === "in_progress") st = "in_progress";
+      else if (d.status === "not_started") st = "pending";
+      return {
+        id: `advisory-${d.id}`,
+        name: d.name,
+        deadline: d.date,
+        status: st,
+      };
+    });
+  }
+
+  // Fire tasks up to timeline
+  useEffect(() => {
+    const tasks = mapAdvisoryTasks();
+    onTasksChange?.(tasks);
+  }, [advisoryDeliverables, onTasksChange]);
+
   return (
     <div className="space-y-6">
+      {/* Advisory Workflow Timeline */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <BarChart3 className="h-5 w-5 text-primary" />
+            Advisory Workflow Progress
+          </CardTitle>
+          <CardDescription>Deliverables mapped as tasks</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <UnifiedProjectTimeline
+            projectStatus={project?.status || "Advisory"}
+            tasks={mapAdvisoryTasks()}
+          />
+        </CardContent>
+      </Card>
+
       {/* Business Metrics Dashboard */}
       <Card>
         <CardHeader>
@@ -1777,11 +2197,10 @@ const AdvisoryView = ({ project, onUpdateStatus }) => {
                         <ArrowDownRight className="h-3 w-3 text-red-500 mr-1" />
                       )}
                       <span className={data.change >= 0 ? "text-green-600" : "text-red-600"}>
-                        {data.change >= 0 ? "+" : ""}{data.change}%
+                        {data.change >= 0 ? "+" : ""}
+                        {data.change}%
                       </span>
-                      <span className="text-muted-foreground ml-1">
-                        vs previous year
-                      </span>
+                      <span className="text-muted-foreground ml-1">vs previous year</span>
                     </div>
                   </div>
                 </CardContent>
@@ -1901,17 +2320,24 @@ const AdvisoryView = ({ project, onUpdateStatus }) => {
                 {advisoryDeliverables.map((deliverable) => (
                   <TableRow key={deliverable.id}>
                     <TableCell className="font-medium">{deliverable.name}</TableCell>
-                    <TableCell>{format(new Date(deliverable.date), "MMM d, yyyy")}</TableCell>
                     <TableCell>
-                      <Badge className={
-                        deliverable.status === "completed"
-                          ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
-                          : deliverable.status === "in_progress"
+                      {format(new Date(deliverable.date), "MMM d, yyyy")}
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        className={
+                          deliverable.status === "completed"
+                            ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
+                            : deliverable.status === "in_progress"
                             ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400"
                             : "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400"
-                      }>
-                        {deliverable.status === "completed" ? "Completed" :
-                         deliverable.status === "in_progress" ? "In Progress" : "Not Started"}
+                        }
+                      >
+                        {deliverable.status === "completed"
+                          ? "Completed"
+                          : deliverable.status === "in_progress"
+                          ? "In Progress"
+                          : "Not Started"}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
@@ -1955,7 +2381,9 @@ const AdvisoryView = ({ project, onUpdateStatus }) => {
           <div className="space-y-4">
             <div className="space-y-3">
               <div className="p-3 rounded-md bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
-                <h4 className="font-medium text-blue-800 dark:text-blue-400 mb-1">Short-Term Actions (0-6 months)</h4>
+                <h4 className="font-medium text-blue-800 dark:text-blue-400 mb-1">
+                  Short-Term Actions (0-6 months)
+                </h4>
                 <ul className="space-y-1 text-sm text-blue-700 dark:text-blue-500">
                   <li className="flex items-start">
                     <Check className="h-4 w-4 mr-1 mt-0.5 flex-shrink-0" />
@@ -1973,7 +2401,9 @@ const AdvisoryView = ({ project, onUpdateStatus }) => {
               </div>
 
               <div className="p-3 rounded-md bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800">
-                <h4 className="font-medium text-purple-800 dark:text-purple-400 mb-1">Medium-Term Strategy (6-18 months)</h4>
+                <h4 className="font-medium text-purple-800 dark:text-purple-400 mb-1">
+                  Medium-Term Strategy (6-18 months)
+                </h4>
                 <ul className="space-y-1 text-sm text-purple-700 dark:text-purple-500">
                   <li className="flex items-start">
                     <Check className="h-4 w-4 mr-1 mt-0.5 flex-shrink-0" />
@@ -1991,7 +2421,9 @@ const AdvisoryView = ({ project, onUpdateStatus }) => {
               </div>
 
               <div className="p-3 rounded-md bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800">
-                <h4 className="font-medium text-indigo-800 dark:text-indigo-400 mb-1">Long-Term Vision (18+ months)</h4>
+                <h4 className="font-medium text-indigo-800 dark:text-indigo-400 mb-1">
+                  Long-Term Vision (18+ months)
+                </h4>
                 <ul className="space-y-1 text-sm text-indigo-700 dark:text-indigo-500">
                   <li className="flex items-start">
                     <Check className="h-4 w-4 mr-1 mt-0.5 flex-shrink-0" />
@@ -2027,29 +2459,67 @@ const AdvisoryView = ({ project, onUpdateStatus }) => {
   );
 };
 
-// Main service-specific views component
-const ServiceSpecificViews = ({ project, onUpdateStatus }) => {
+/* --------------------------------------------------------------------------
+   MAIN SERVICE-SPECIFIC VIEWS COMPONENT
+-------------------------------------------------------------------------- */
+export default function ServiceSpecificViews({
+  project,
+  onUpdateStatus,
+  onTasksChange,
+}: ServiceSpecificViewsProps) {
   if (!project) return null;
 
   const serviceType = project.service_type || "";
 
-  // Helper function to determine which view to show
+  // Decide which specialized view to display
   const getServiceView = () => {
     if (serviceType.includes("Tax")) {
-      return <TaxReturnView project={project} onUpdateStatus={onUpdateStatus} />;
+      return (
+        <TaxReturnView
+          project={project}
+          onUpdateStatus={onUpdateStatus}
+          onTasksChange={onTasksChange}
+        />
+      );
     } else if (serviceType.includes("Audit")) {
-      return <AuditView project={project} onUpdateStatus={onUpdateStatus} />;
+      return (
+        <AuditView
+          project={project}
+          onUpdateStatus={onUpdateStatus}
+          onTasksChange={onTasksChange}
+        />
+      );
     } else if (serviceType.includes("Bookkeeping") || serviceType.includes("CAS")) {
-      return <CASView project={project} onUpdateStatus={onUpdateStatus} />;
+      return (
+        <CASView
+          project={project}
+          onUpdateStatus={onUpdateStatus}
+          onTasksChange={onTasksChange}
+        />
+      );
     } else if (serviceType.includes("Financial Planning")) {
-      return <FinancialPlanningView project={project} onUpdateStatus={onUpdateStatus} />;
+      return (
+        <FinancialPlanningView
+          project={project}
+          onUpdateStatus={onUpdateStatus}
+          onTasksChange={onTasksChange}
+        />
+      );
     } else if (serviceType.includes("Advisory")) {
-      return <AdvisoryView project={project} onUpdateStatus={onUpdateStatus} />;
+      return (
+        <AdvisoryView
+          project={project}
+          onUpdateStatus={onUpdateStatus}
+          onTasksChange={onTasksChange}
+        />
+      );
     } else {
-      // Default case if no service type is recognized
+      // Default fallback
       return (
         <div className="p-6 text-center">
-          <p className="text-muted-foreground">No specialized view available for this service type.</p>
+          <p className="text-muted-foreground">
+            No specialized view available for this service type.
+          </p>
         </div>
       );
     }
@@ -2086,6 +2556,6 @@ const ServiceSpecificViews = ({ project, onUpdateStatus }) => {
       {getServiceView()}
     </div>
   );
-};
+}
 
-export default ServiceSpecificViews;
+// export default ServiceSpecificViews;

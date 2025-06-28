@@ -5,11 +5,18 @@ import axios from "axios";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
-import { ModeToggle } from "@/components/mode-toggle";
+import { ModeToggle } from "@/components/ui/mode-toggle";
 import { useToast } from "@/components/ui/use-toast";
 import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
@@ -29,14 +36,14 @@ import {
   Download,
   ExternalLink,
   Calendar,
-  FileCheck
+  FileCheck,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 // Import the enhanced service views component:
 import ClientPortalServiceViews from "@/components/ClientPortalServiceViews";
 
-const API_BASE_URL = "https://keyveve-accounting-demo-backend.onrender.com";
+const API_BASE_URL = "http://localhost:8000";
 
 const PROJECT_STATUSES = [
   "Onboarding",
@@ -45,17 +52,7 @@ const PROJECT_STATUSES = [
   "Pricing/Analysis",
   "Awaiting Signature",
   "Project Started",
-  "Completed"
-];
-
-const CLIENT_VISIBLE_STATUSES = [
-  "Onboarding",
-  "Docs Requested",
-  "Docs Received",
-  // "Pricing/Analysis" - removed from client view
-  "Awaiting Signature",
-  "Project Started",
-  "Completed"
+  "Completed",
 ];
 
 interface Document {
@@ -73,7 +70,7 @@ interface Task {
   id: string;
   title: string;
   description?: string;
-  status: string;
+  status: string; // pending | in_progress | blocked | completed, etc.
   deadline?: string;
   assigned_to: string[];
   related_docs: string[];
@@ -124,13 +121,16 @@ export default function ClientPortalPage() {
   const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
   const { toast } = useToast();
 
+  // Fetch the project
   const loadProject = useCallback(async () => {
     setLoading(true);
     try {
       const res = await axios.get(`${API_BASE_URL}/projects/${projectId}`);
       setProject(res.data);
 
-      const staffMessages = res.data.messages.filter((msg: Message) => msg.sender === "staff");
+      const staffMessages = res.data.messages.filter(
+        (msg: Message) => msg.sender === "staff"
+      );
       setUnreadMessages(staffMessages.length);
 
       toast({
@@ -138,6 +138,7 @@ export default function ClientPortalPage() {
         description: `Loaded details for ${res.data.service_type}: ${res.data.client_name}`,
       });
 
+      // Also load staff
       try {
         const staffRes = await axios.get(`${API_BASE_URL}/staff/`);
         setStaffMembers(staffRes.data);
@@ -156,12 +157,14 @@ export default function ClientPortalPage() {
     }
   }, [projectId, toast]);
 
+  // On mount, load project and set up refresh interval
   useEffect(() => {
     loadProject();
     const intervalId = setInterval(loadProject, 30000);
     return () => clearInterval(intervalId);
   }, [projectId, loadProject]);
 
+  // Upload documents
   const handleUpload = async () => {
     if (!file) {
       toast({
@@ -201,19 +204,18 @@ export default function ClientPortalPage() {
     }
   };
 
+  // Sign engagement letter
   const handleSignEngagementLetter = async () => {
     if (!project) return;
-
     setLoading(true);
     try {
-      await axios.patch(`${API_BASE_URL}/projects/${project.id}/status?new_status=Project Started`);
-
+      await axios.patch(
+        `${API_BASE_URL}/projects/${project.id}/status?new_status=Project Started`
+      );
       toast({
         title: "Success!",
         description: "Engagement letter signed successfully.",
-        variant: "default",
       });
-
       loadProject();
     } catch (error) {
       console.error("Error signing engagement letter:", error);
@@ -227,6 +229,7 @@ export default function ClientPortalPage() {
     }
   };
 
+  // Helper: relative time
   const formatRelativeTime = (timestamp: string | undefined) => {
     if (!timestamp) return "Unknown";
     try {
@@ -239,11 +242,11 @@ export default function ClientPortalPage() {
         const diffInHours = Math.floor(diffInMs / (1000 * 60 * 60));
         if (diffInHours === 0) {
           const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
-          return `${diffInMinutes} minute${diffInMinutes !== 1 ? 's' : ''} ago`;
+          return `${diffInMinutes} minute${diffInMinutes !== 1 ? "s" : ""} ago`;
         }
-        return `${diffInHours} hour${diffInHours !== 1 ? 's' : ''} ago`;
+        return `${diffInHours} hour${diffInHours !== 1 ? "s" : ""} ago`;
       } else if (diffInDays < 7) {
-        return `${diffInDays} day${diffInDays !== 1 ? 's' : ''} ago`;
+        return `${diffInDays} day${diffInDays !== 1 ? "s" : ""} ago`;
       } else {
         return date.toLocaleDateString();
       }
@@ -252,38 +255,47 @@ export default function ClientPortalPage() {
     }
   };
 
-  const getStaffName = (staffId: string) => {
-    const staff = staffMembers.find(s => s.id === staffId);
-    return staff ? staff.name : "Unknown";
-  };
-
-  const getTaskStatusBadge = (status: string) => {
-    switch (status) {
-      case "completed":
-        return <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">Completed</Badge>;
-      case "in_progress":
-        return <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">In Progress</Badge>;
-      case "blocked":
-        return <Badge className="bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">Blocked</Badge>;
-      default:
-        return <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">Pending</Badge>;
-    }
-  };
-
+  // Render status as a badge
   const renderStatusBadge = (status: string) => {
-    const statusColors: Record<string, { color: string; bgColor: string }> = {
-      "Onboarding": { color: "text-blue-700 dark:text-blue-400", bgColor: "bg-blue-100 dark:bg-blue-900/30" },
-      "Docs Requested": { color: "text-amber-700 dark:text-amber-400", bgColor: "bg-amber-100 dark:bg-amber-900/30" },
-      "Docs Received": { color: "text-violet-700 dark:text-violet-400", bgColor: "bg-violet-100 dark:bg-violet-900/30" },
-      "Awaiting Signature": { color: "text-pink-700 dark:text-pink-400", bgColor: "bg-pink-100 dark:bg-pink-900/30" },
-      "Project Started": { color: "text-emerald-700 dark:text-emerald-400", bgColor: "bg-emerald-100 dark:bg-emerald-900/30" },
-      "Completed": { color: "text-green-700 dark:text-green-400", bgColor: "bg-green-100 dark:bg-green-900/30" },
+    const statusColors: Record<
+      string,
+      { color: string; bgColor: string }
+    > = {
+      Onboarding: {
+        color: "text-blue-700 dark:text-blue-400",
+        bgColor: "bg-blue-100 dark:bg-blue-900/30",
+      },
+      "Docs Requested": {
+        color: "text-amber-700 dark:text-amber-400",
+        bgColor: "bg-amber-100 dark:bg-amber-900/30",
+      },
+      "Docs Received": {
+        color: "text-violet-700 dark:text-violet-400",
+        bgColor: "bg-violet-100 dark:bg-violet-900/30",
+      },
+      "Awaiting Signature": {
+        color: "text-pink-700 dark:text-pink-400",
+        bgColor: "bg-pink-100 dark:bg-pink-900/30",
+      },
+      "Project Started": {
+        color: "text-emerald-700 dark:text-emerald-400",
+        bgColor: "bg-emerald-100 dark:bg-emerald-900/30",
+      },
+      Completed: {
+        color: "text-green-700 dark:text-green-400",
+        bgColor: "bg-green-100 dark:bg-green-900/30",
+      },
     };
 
-    const style = statusColors[status] || { color: "text-gray-700 dark:text-gray-400", bgColor: "bg-gray-100 dark:bg-gray-900/30" };
+    const style = statusColors[status] || {
+      color: "text-gray-700 dark:text-gray-400",
+      bgColor: "bg-gray-100 dark:bg-gray-900/30",
+    };
 
     return (
-      <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${style.color} ${style.bgColor}`}>
+      <span
+        className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${style.color} ${style.bgColor}`}
+      >
         {status}
       </span>
     );
@@ -291,6 +303,7 @@ export default function ClientPortalPage() {
 
   return (
     <div className="flex min-h-screen flex-col">
+      {/* HEADER */}
       <header className="border-b">
         <div className="container mx-auto px-4 flex h-16 items-center justify-between">
           <div className="flex items-center space-x-4">
@@ -311,7 +324,7 @@ export default function ClientPortalPage() {
                 <span className="hidden sm:inline-block">Messages</span>
                 {unreadMessages > 0 && (
                   <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-red-500 text-white text-xs flex items-center justify-center">
-                    {unreadMessages > 9 ? '9+' : unreadMessages}
+                    {unreadMessages > 9 ? "9+" : unreadMessages}
                   </span>
                 )}
               </Button>
@@ -321,6 +334,7 @@ export default function ClientPortalPage() {
         </div>
       </header>
 
+      {/* MAIN */}
       <main className="flex-1">
         <div className="container mx-auto px-4 py-6">
           <div className="flex flex-col space-y-8 md:space-y-10">
@@ -331,6 +345,7 @@ export default function ClientPortalPage() {
               </p>
             </div>
 
+            {/* Project ID & Load */}
             <div className="flex flex-col space-y-4 md:flex-row md:items-end md:justify-between md:space-y-0">
               <div className="flex items-end gap-4">
                 <div className="grid w-full max-w-sm items-center gap-1.5">
@@ -343,11 +358,7 @@ export default function ClientPortalPage() {
                     className="w-24"
                   />
                 </div>
-                <Button
-                  onClick={loadProject}
-                  disabled={loading}
-                  variant="outline"
-                >
+                <Button onClick={loadProject} disabled={loading} variant="outline">
                   {loading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -363,15 +374,20 @@ export default function ClientPortalPage() {
               </div>
             </div>
 
+            {/* If project is loaded, show TABS */}
             {project ? (
-              <Tabs defaultValue={activeTab} onValueChange={setActiveTab} className="w-full">
+              <Tabs
+                defaultValue={activeTab}
+                onValueChange={setActiveTab}
+                className="w-full"
+              >
                 <TabsList>
                   <TabsTrigger value="overview">Overview</TabsTrigger>
                   <TabsTrigger value="documents">Documents</TabsTrigger>
                   <TabsTrigger value="tasks">Tasks</TabsTrigger>
                 </TabsList>
 
-                {/* --- REPLACED OVERVIEW TAB CONTENT --- */}
+                {/* OVERVIEW TAB: now with ClientPortalServiceViews embedded */}
                 <TabsContent value="overview" className="space-y-6 pt-4">
                   <Card>
                     <CardHeader>
@@ -389,20 +405,23 @@ export default function ClientPortalPage() {
                       </div>
                     </CardHeader>
                     <CardContent>
+                      {/* ClientPortalServiceViews is where we add the new tasks-based progress bar & sub-view */}
                       <ClientPortalServiceViews
                         project={project}
                         documents={project.docs}
                         tasks={project.tasks}
-                        staff={project.assigned_staff?.map(staffId =>
-                          staffMembers.find(s => s.id === staffId)
-                        ).filter(Boolean)}
+                        staff={project.assigned_staff
+                          ?.map((staffId) =>
+                            staffMembers.find((s) => s.id === staffId)
+                          )
+                          .filter(Boolean)}
                         onSignLetter={handleSignEngagementLetter}
                       />
                     </CardContent>
                   </Card>
                 </TabsContent>
-                {/* --- END OF REPLACED OVERVIEW TAB CONTENT --- */}
 
+                {/* DOCUMENTS TAB */}
                 <TabsContent value="documents" className="space-y-6 pt-4">
                   <Card>
                     <CardHeader>
@@ -421,8 +440,12 @@ export default function ClientPortalPage() {
                             <div className="rounded-full bg-primary/10 p-3 mb-2">
                               <Upload className="h-6 w-6 text-primary" />
                             </div>
-                            <p className="font-medium">Click to select a file or drag and drop</p>
-                            <p className="text-sm text-muted-foreground">PDF, Excel, Word, or image files</p>
+                            <p className="font-medium">
+                              Click to select a file or drag and drop
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              PDF, Excel, Word, or image files
+                            </p>
                             {file && (
                               <Badge variant="outline" className="mt-2">
                                 {file.name}
@@ -463,9 +486,12 @@ export default function ClientPortalPage() {
                           <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 p-3 text-sm flex items-start space-x-2">
                             <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-500 mt-0.5 flex-shrink-0" />
                             <div>
-                              <p className="font-medium text-amber-700 dark:text-amber-500">Documents Requested</p>
+                              <p className="font-medium text-amber-700 dark:text-amber-500">
+                                Documents Requested
+                              </p>
                               <p className="text-amber-700 dark:text-amber-400">
-                                Please upload the requested documents to proceed with your {project.service_type} project.
+                                Please upload the requested documents to proceed with your{" "}
+                                {project.service_type} project.
                               </p>
                             </div>
                           </div>
@@ -530,6 +556,7 @@ export default function ClientPortalPage() {
                   </Card>
                 </TabsContent>
 
+                {/* TASKS TAB */}
                 <TabsContent value="tasks" className="space-y-6 pt-4">
                   <Card>
                     <CardHeader>
@@ -558,15 +585,28 @@ export default function ClientPortalPage() {
                                 <div className="space-y-1">
                                   <div className="flex items-center gap-2">
                                     <p className="font-medium">{task.title}</p>
-                                    {getTaskStatusBadge(task.status)}
+                                    {/* Simple status badge for example */}
+                                    <Badge variant="outline">
+                                      {task.status === "completed"
+                                        ? "Completed"
+                                        : task.status === "in_progress"
+                                        ? "In Progress"
+                                        : task.status === "blocked"
+                                        ? "Blocked"
+                                        : "Pending"}
+                                    </Badge>
                                   </div>
                                   {task.description && (
-                                    <p className="text-sm text-muted-foreground">{task.description}</p>
+                                    <p className="text-sm text-muted-foreground">
+                                      {task.description}
+                                    </p>
                                   )}
                                   {task.deadline && (
                                     <div className="flex items-center text-xs text-muted-foreground">
                                       <Calendar className="h-3 w-3 mr-1" />
-                                      <span>Due: {new Date(task.deadline).toLocaleDateString()}</span>
+                                      <span>
+                                        Due: {new Date(task.deadline).toLocaleDateString()}
+                                      </span>
                                     </div>
                                   )}
                                   {(task.scheduled_start || task.scheduled_end) && (
@@ -574,13 +614,18 @@ export default function ClientPortalPage() {
                                       {task.scheduled_start && (
                                         <div className="flex items-center">
                                           <Calendar className="h-3 w-3 mr-1" />
-                                          <span>Start: {new Date(task.scheduled_start).toLocaleDateString()}</span>
+                                          <span>
+                                            Start:{" "}
+                                            {new Date(task.scheduled_start).toLocaleDateString()}
+                                          </span>
                                         </div>
                                       )}
                                       {task.scheduled_end && (
                                         <div className="flex items-center ml-2">
                                           <Clock className="h-3 w-3 mr-1" />
-                                          <span>Due: {new Date(task.scheduled_end).toLocaleDateString()}</span>
+                                          <span>
+                                            Due: {new Date(task.scheduled_end).toLocaleDateString()}
+                                          </span>
                                         </div>
                                       )}
                                     </div>
@@ -592,18 +637,12 @@ export default function ClientPortalPage() {
                         </div>
                       )}
 
-                      {project.tasks.filter(task => task.scheduled_start || task.scheduled_end).length > 0 && (
-                        <div className="mt-4 p-3 rounded-lg bg-muted/20 border text-sm">
-                          <h4 className="font-medium mb-1">Scheduled Tasks</h4>
-                          <p className="text-muted-foreground">
-                            Our team has scheduled specific dates for your project tasks to ensure timely completion.
-                          </p>
-                        </div>
-                      )}
-
+                      {/* Additional placeholders for Docs Requested or Awaiting Signature */}
                       {project.status === "Docs Requested" && project.docs.length === 0 && (
                         <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 p-3 text-sm">
-                          <p className="font-medium text-amber-700 dark:text-amber-500">Action Required</p>
+                          <p className="font-medium text-amber-700 dark:text-amber-500">
+                            Action Required
+                          </p>
                           <p className="text-amber-700 dark:text-amber-400">
                             Please upload the requested documents to proceed with your project.
                           </p>
@@ -725,6 +764,7 @@ export default function ClientPortalPage() {
                 </TabsContent>
               </Tabs>
             ) : (
+              // No project loaded or loading
               <Card>
                 <CardContent className="flex flex-col items-center justify-center py-8 text-center">
                   {loading ? (
@@ -748,15 +788,22 @@ export default function ClientPortalPage() {
         </div>
       </main>
 
+      {/* FOOTER */}
       <footer className="border-t py-6">
         <div className="container mx-auto px-4 flex flex-col items-center justify-between gap-4 md:h-10 md:flex-row">
           <p className="text-center text-sm text-muted-foreground md:text-left">
             &copy; {new Date().getFullYear()} Keyveve AI Accounting. All rights reserved.
           </p>
           <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-            <a href="#" className="hover:underline">Privacy Policy</a>
-            <a href="#" className="hover:underline">Terms of Service</a>
-            <a href="#" className="hover:underline">Contact Support</a>
+            <a href="#" className="hover:underline">
+              Privacy Policy
+            </a>
+            <a href="#" className="hover:underline">
+              Terms of Service
+            </a>
+            <a href="#" className="hover:underline">
+              Contact Support
+            </a>
           </div>
         </div>
       </footer>

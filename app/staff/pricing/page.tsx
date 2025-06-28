@@ -8,7 +8,7 @@ import axios from "axios";
 
 import EnhancedPricingCalculation from "@/components/enhancedpricingcalculation";
 
-const API_BASE_URL = "https://keyveve-accounting-demo-backend.onrender.com";
+const API_BASE_URL = "http://localhost:8000";
 
 function PricingPageInner() {
   const searchParams = useSearchParams();

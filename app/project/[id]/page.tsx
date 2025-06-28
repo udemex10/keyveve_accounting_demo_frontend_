@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import axios from "axios";
 import Link from "next/link";
@@ -38,14 +38,21 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+
+import { CalendarIcon } from "@radix-ui/react-icons";
 import { format } from "date-fns";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon } from "@radix-ui/react-icons";
 
 import EnhancedDocumentsTab from "@/components/EnhancedDocumentsTab";
 import ServiceSpecificViews from "@/components/ServiceSpecificViews";
 import TaskScheduler from "@/components/TaskScheduler";
+
+/* --------------------------------------------------------------------------
+   NEW UnifiedProjectTimeline import
+-------------------------------------------------------------------------- */
+import UnifiedProjectTimeline from "@/components/UnifiedProjectTimeline";
+import type { WorkflowTask } from "@/components/UnifiedProjectTimeline";
 
 import {
   ArrowLeft,
@@ -67,44 +74,41 @@ import {
   HelpCircle,
   UserPlus,
   Briefcase,
+  Wand2,
+  Brain,
+  CheckCircle2,
 } from "lucide-react";
 
 /* -------------------------------------------------------------------
    Interfaces / Types
 ------------------------------------------------------------------- */
 
-// Example interface for a single document
 interface ProjectDocument {
   id: number;
   name: string;
-  // Add other fields as needed
 }
 
-// Example interface for a note
 interface Note {
-  id: string; // or number, depending on your backend
+  id: string;
   author: string;
   text: string;
   timestamp: string;
 }
 
-// Example interface for a task
 interface Task {
-  id: number;
+  id: string | number;
   name: string;
-  status?: string; // "pending" | "in_progress" | "blocked" | "completed" etc.
+  status?: "pending" | "in_progress" | "blocked" | "completed";
+  deadline?: string;
   notes?: Note[];
-  // Add other fields as needed
 }
 
-// Example interface for a staff member
 interface Staff {
   id: number;
   name: string;
   role?: string;
 }
 
-// Example interface for a message
 interface Message {
   id: number;
   sender: "staff" | "client";
@@ -113,7 +117,6 @@ interface Message {
   timestamp?: string;
 }
 
-// Example interface for a project
 interface Project {
   id: number;
   client_name: string;
@@ -122,13 +125,11 @@ interface Project {
   docs: ProjectDocument[];
   assigned_staff: number[];
   staff_roles?: { [staffId: number]: string };
-  tasks?: Task[];
   messages?: Message[];
   created_at?: string;
   updated_at?: string;
 }
 
-// For the QA endpoint response shape
 interface QAResponse {
   answer: string;
 }
@@ -136,12 +137,13 @@ interface QAResponse {
 /* -------------------------------------------------------------------
    Constants
 ------------------------------------------------------------------- */
-const API_BASE_URL = "https://keyveve-accounting-demo-backend.onrender.com";
+const API_BASE_URL = "http://localhost:8000";
 
 /* -------------------------------------------------------------------
-   Components
+   Sub-components
 ------------------------------------------------------------------- */
 
+/** Simulate sending to an engagement letter system **/
 interface SendToEngagementLetterButtonProps {
   project: Project | null;
   isDisabled?: boolean;
@@ -156,7 +158,6 @@ const SendToEngagementLetterButton: React.FC<SendToEngagementLetterButtonProps> 
 
   const handleSend = async () => {
     if (!project) return;
-
     setSending(true);
     try {
       // Simulate an external send operation
@@ -180,11 +181,7 @@ const SendToEngagementLetterButton: React.FC<SendToEngagementLetterButtonProps> 
 
   return (
     <>
-      <Button
-        onClick={handleSend}
-        disabled={sending || isDisabled}
-        className="w-full gap-2"
-      >
+      <Button onClick={handleSend} disabled={sending || isDisabled} className="w-full gap-2">
         {sending ? (
           <>
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -237,65 +234,7 @@ const SendToEngagementLetterButton: React.FC<SendToEngagementLetterButtonProps> 
   );
 };
 
-interface ProjectStatusProgressProps {
-  status: string;
-}
-const ProjectStatusProgress: React.FC<ProjectStatusProgressProps> = ({ status }) => {
-  const stages = [
-    "Onboarding",
-    "Docs Requested",
-    "Docs Received",
-    "Pricing/Analysis",
-    "Awaiting Signature",
-    "Project Started",
-    "Completed",
-  ];
-  const currentIndex = stages.indexOf(status);
-
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center space-x-1">
-        {stages.map((stage, index) => {
-          const isCompleted = index <= currentIndex;
-          const isCurrent = index === currentIndex;
-          return (
-            <div
-              key={stage}
-              className={`h-2 flex-1 rounded-sm ${
-                isCompleted
-                  ? isCurrent
-                    ? "bg-primary"
-                    : "bg-primary/60"
-                  : "bg-muted"
-              }`}
-            />
-          );
-        })}
-      </div>
-      <div className="grid grid-cols-7 gap-1 text-xs">
-        {stages.map((stage, index) => {
-          const isCompleted = index <= currentIndex;
-          const isCurrent = index === currentIndex;
-          return (
-            <div
-              key={stage}
-              className={`text-center truncate ${
-                isCurrent
-                  ? "text-primary font-medium"
-                  : isCompleted
-                  ? "text-primary/60"
-                  : "text-muted-foreground"
-              }`}
-            >
-              {stage}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-};
-
+/** Simple Q&A component that calls an AI endpoint **/
 interface QAComponentProps {
   projectId: number;
 }
@@ -375,6 +314,7 @@ const QAComponent: React.FC<QAComponentProps> = ({ projectId }) => {
   );
 };
 
+/** Next Step Guidance (shows recommended next status) **/
 interface NextStepGuidanceProps {
   status: string;
   onActionClick: {
@@ -382,10 +322,7 @@ interface NextStepGuidanceProps {
     projectId: number;
   };
 }
-const NextStepGuidance: React.FC<NextStepGuidanceProps> = ({
-  status,
-  onActionClick,
-}) => {
+const NextStepGuidance: React.FC<NextStepGuidanceProps> = ({ status, onActionClick }) => {
   let content:
     | {
         title: string;
@@ -523,41 +460,266 @@ const getStatusIcon = (status: string): JSX.Element => {
   }
 };
 
-/*
-   TaskNote component if you need to display notes on tasks.
-   Currently, it isn't used in the main code but included for completeness.
-*/
-interface TaskNoteProps {
-  note: Note;
-  onDelete: (noteId: string) => void;
+/* ------------------------------------------------------------------
+   KickoffAnalyzer – a multi-step approach with 2 tabs
+------------------------------------------------------------------ */
+function KickoffAnalyzer({
+  open,
+  onOpenChange,
+  serviceType,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  serviceType: string;
+}) {
+  const { toast } = useToast();
+  const [stepIndex, setStepIndex] = React.useState(0);
+
+  const STEPS = [
+    {
+      key: "preparing",
+      label: "Preparing Environment",
+      description: "Setting up initial environment and loading modules.",
+    },
+    {
+      key: "scanning",
+      label: "Scanning Project Data",
+      description: "Analyzing questionnaires, prior docs, and scope.",
+    },
+    {
+      key: "matching",
+      label: "Matching Service Template",
+      description: "Applying templates for tasks relevant to the service type.",
+    },
+    {
+      key: "generating",
+      label: "Generating Task Timeline",
+      description: "Building out tasks, deadlines, and dependencies.",
+    },
+    {
+      key: "finalizing",
+      label: "Finalizing Kick-off Setup",
+      description: "Cleaning data and preparing final handoff.",
+    },
+    {
+      key: "complete",
+      label: "Kick-off Complete",
+      description: "All tasks have been generated and are ready to use.",
+    },
+  ];
+
+  function getProgressValue(i: number) {
+    switch (i) {
+      case 0:
+        return 5;
+      case 1:
+        return 25;
+      case 2:
+        return 50;
+      case 3:
+        return 75;
+      case 4:
+        return 90;
+      case 5:
+        return 100;
+      default:
+        return 0;
+    }
+  }
+
+  const currentStep = STEPS[stepIndex];
+  const progressValue = getProgressValue(stepIndex);
+
+  React.useEffect(() => {
+    if (!open) return;
+
+    setStepIndex(0);
+
+    const intervals = [
+      setTimeout(() => setStepIndex(1), 1500),
+      setTimeout(() => setStepIndex(2), 4000),
+      setTimeout(() => setStepIndex(3), 7000),
+      setTimeout(() => setStepIndex(4), 10000),
+      setTimeout(() => setStepIndex(5), 13000),
+      setTimeout(() => {
+        toast({
+          title: "Kick-off complete!",
+          description: `Tasks ready for ${serviceType} workflow.`,
+        });
+      }, 13500),
+    ];
+
+    return () => intervals.forEach(clearTimeout);
+  }, [open, serviceType, toast]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Brain className="h-5 w-5 text-primary" />
+            Kick-off Analyzer for {serviceType}
+          </DialogTitle>
+          <DialogDescription>
+            Simulating generation of tasks & timeline.
+          </DialogDescription>
+        </DialogHeader>
+
+        <Tabs defaultValue="analysis">
+          <TabsList className="grid grid-cols-2 w-full mb-4">
+            <TabsTrigger value="analysis">Analysis Progress</TabsTrigger>
+            <TabsTrigger value="details">Technical Details</TabsTrigger>
+          </TabsList>
+
+          {/* TAB 1 */}
+          <TabsContent value="analysis">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <div className="relative h-2 bg-muted/20 overflow-hidden rounded">
+                  <div
+                    className="h-full bg-primary transition-all duration-500 ease-out"
+                    style={{ width: `${progressValue}%` }}
+                  />
+                </div>
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>Processing tasks for {serviceType} project</span>
+                  <span>{progressValue}%</span>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                {STEPS.map((step, i) => {
+                  const isActive = i === stepIndex;
+                  const isComplete = i < stepIndex;
+
+                  let icon = <AlertCircle className="h-5 w-5 text-muted-foreground" />;
+                  if (isComplete) {
+                    icon = <CheckCircle2 className="h-5 w-5 text-green-500" />;
+                  } else if (isActive) {
+                    icon = <Loader2 className="h-5 w-5 animate-spin text-primary" />;
+                  }
+
+                  return (
+                    <div key={step.key} className="flex items-start space-x-3">
+                      {icon}
+                      <div>
+                        <p className={`font-medium ${isComplete ? "text-primary" : ""}`}>
+                          {step.label}
+                        </p>
+                        <p className="text-xs text-muted-foreground">{step.description}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="rounded-md border bg-muted/30 p-4">
+                <div className="flex items-start space-x-3">
+                  {stepIndex < STEPS.length - 1 ? (
+                    <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                  ) : (
+                    <CheckCircle2 className="h-5 w-5 text-green-500" />
+                  )}
+
+                  <div>
+                    <p className="font-medium">
+                      {stepIndex < STEPS.length - 1
+                        ? "Current Step:"
+                        : "All Steps Complete!"}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {currentStep.label} — {currentStep.description}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </TabsContent>
+
+          {/* TAB 2 */}
+          <TabsContent value="details">
+            <ScrollArea className="h-[300px] pr-2">
+              <div className="text-xs font-mono space-y-3">
+                <div>
+                  <p className="text-green-600">> Initializing AI environment…</p>
+                  <p className="text-muted-foreground pl-4">Loading baseline task templates…</p>
+                  <p className="text-muted-foreground pl-4">Loading {serviceType} parameters…</p>
+                  <p className="text-muted-foreground pl-4">
+                    Checking existing tasks or prior templates…
+                  </p>
+                  <p className="text-muted-foreground pl-4">Ready to proceed.</p>
+                </div>
+
+                {stepIndex >= 1 && (
+                  <div>
+                    <p className="text-green-600">> Scanning project data…</p>
+                    <p className="text-muted-foreground pl-4">
+                      Found client questionnaire, scope definitions.
+                    </p>
+                    <p className="text-muted-foreground pl-4">
+                      Checking required tasks for {serviceType}.
+                    </p>
+                  </div>
+                )}
+
+                {stepIndex >= 2 && (
+                  <div>
+                    <p className="text-green-600">> Matching service template…</p>
+                    <p className="text-muted-foreground pl-4">
+                      Mapped tasks from library: 23 possible tasks found.
+                    </p>
+                    <p className="text-muted-foreground pl-4">
+                      Filtering tasks based on project scope & staffing.
+                    </p>
+                  </div>
+                )}
+
+                {stepIndex >= 3 && (
+                  <div>
+                    <p className="text-green-600">> Generating task timeline…</p>
+                    <p className="text-muted-foreground pl-4">
+                      Setting deadlines and dependencies.
+                    </p>
+                    <p className="text-muted-foreground pl-4">
+                      Grouping tasks under phases: planning, execution, review.
+                    </p>
+                  </div>
+                )}
+
+                {stepIndex >= 4 && (
+                  <div>
+                    <p className="text-green-600">> Finalizing kick-off…</p>
+                    <p className="text-muted-foreground pl-4">
+                      Locking in start & end dates for each phase.
+                    </p>
+                    <p className="text-muted-foreground pl-4">
+                      Creating final task manifest for staff assignment.
+                    </p>
+                  </div>
+                )}
+
+                {stepIndex >= 5 && (
+                  <div>
+                    <p className="text-green-600">> Done!</p>
+                    <p className="text-muted-foreground pl-4">
+                      Created tasks successfully for {serviceType} workflow.
+                    </p>
+                    <p className="text-muted-foreground pl-4">
+                      Kick-off is complete and ready for next steps.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </ScrollArea>
+          </TabsContent>
+        </Tabs>
+      </DialogContent>
+    </Dialog>
+  );
 }
-const TaskNote: React.FC<TaskNoteProps> = ({ note, onDelete }) => (
-  <div className="flex items-start space-x-2 p-2 border rounded-md bg-muted/30 mt-2">
-    <Avatar className="h-6 w-6">
-      <AvatarFallback className="text-xs">{note.author.charAt(0)}</AvatarFallback>
-    </Avatar>
-    <div className="flex-1 text-sm">
-      <div className="flex justify-between items-center">
-        <div>
-          <span className="font-medium">{note.author}</span>
-          <span className="text-xs text-muted-foreground ml-2">{note.timestamp}</span>
-        </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-6 w-6 p-0"
-          onClick={() => onDelete(note.id)}
-        >
-          <Check className="h-3 w-3" />
-        </Button>
-      </div>
-      <p className="mt-1">{note.text}</p>
-    </div>
-  </div>
-);
 
 /* -------------------------------------------------------------------
-   EnhancedProjectDetailPage (Main Component)
+   EnhancedProjectDetailPage
 ------------------------------------------------------------------- */
 export default function EnhancedProjectDetailPage(): JSX.Element {
   const params = useParams() as { id?: string };
@@ -569,13 +731,22 @@ export default function EnhancedProjectDetailPage(): JSX.Element {
   const [statusUpdating, setStatusUpdating] = useState<boolean>(false);
   const [staffSelection, setStaffSelection] = useState<number[]>([]);
   const [staffRoles, setStaffRoles] = useState<{ [staffId: number]: string }>({});
+  const [timelineTasks, setTimelineTasks] = useState<WorkflowTask[]>([]);
+
+  // For the KickoffAnalyzer dialog:
+  const [showKickoff, setShowKickoff] = useState(false);
 
   const { toast } = useToast();
 
-  // For storing notes if tasks exist
-  const [taskNotes, setTaskNotes] = useState<{ [taskId: number]: Note[] }>({});
+  // NEW local state for the risk score, generated once on mount.
+  const [riskScore, setRiskScore] = useState<number | null>(null);
 
-  // Load the project details
+  // Generate dummy risk once on mount
+  useEffect(() => {
+    setRiskScore(Math.floor(Math.random() * 100));
+  }, []);
+
+  // Load the project data
   const loadProject = async () => {
     setLoading(true);
     try {
@@ -584,13 +755,6 @@ export default function EnhancedProjectDetailPage(): JSX.Element {
 
       const staffRes = await axios.get<Staff[]>(`${API_BASE_URL}/staff/`);
       setStaffMembers(staffRes.data);
-
-      // Initialize notes state
-      const notesState: { [taskId: number]: Note[] } = {};
-      projRes.data.tasks?.forEach((task) => {
-        notesState[task.id] = task.notes || [];
-      });
-      setTaskNotes(notesState);
 
       toast({
         title: "Project loaded",
@@ -609,12 +773,10 @@ export default function EnhancedProjectDetailPage(): JSX.Element {
   };
 
   useEffect(() => {
-    // Load project data on mount or when projectId changes
     loadProject();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
 
-  // Sync assigned staff and roles from the project data
+  // Sync staff from project data
   useEffect(() => {
     if (project && project.assigned_staff) {
       setStaffSelection(project.assigned_staff);
@@ -626,7 +788,7 @@ export default function EnhancedProjectDetailPage(): JSX.Element {
     }
   }, [project]);
 
-  // Update the project's status
+  // Update the project status
   const updateStatus = async (newStatus: string) => {
     if (!project) return;
     setStatusUpdating(true);
@@ -673,7 +835,7 @@ export default function EnhancedProjectDetailPage(): JSX.Element {
     }
   };
 
-  // Format relative time
+  // Relative time helper
   const formatRelativeTime = (timestamp?: string) => {
     if (!timestamp) return "Unknown";
     try {
@@ -699,12 +861,12 @@ export default function EnhancedProjectDetailPage(): JSX.Element {
     }
   };
 
-  // Helper to get staff name by ID
+  // Quick staff name fetch
   const getStaffName = (id: number): string => {
     return staffMembers.find((s) => s.id === id)?.name || "Unknown";
   };
 
-  // Render a pill/badge for a given status
+  // Status pill
   const renderStatusBadge = (status: string): JSX.Element => {
     const colors: { [key: string]: { color: string; bg: string } } = {
       Onboarding: { color: "text-blue-700", bg: "bg-blue-100" },
@@ -727,8 +889,8 @@ export default function EnhancedProjectDetailPage(): JSX.Element {
 
   return (
     <div className="container mx-auto px-4 py-6 max-w-7xl">
-      {/* Page Header */}
-      <div className="flex items-center space-x-2 mb-6">
+      {/* Top row (Back link, client name, service type, status, etc.) */}
+      <div className="flex items-center space-x-2 mb-2">
         <Link href="/staff">
           <Button variant="ghost" size="sm">
             <ArrowLeft className="h-4 w-4 mr-2" />
@@ -743,6 +905,20 @@ export default function EnhancedProjectDetailPage(): JSX.Element {
           <div className="flex items-center space-x-2">
             <Badge className="ml-2">{project.service_type}</Badge>
             {renderStatusBadge(project.status)}
+            {/* MOVED: Deadline Risk card is now next to the status badges */}
+            {riskScore !== null && (
+              <Badge
+                className={
+                  riskScore > 70
+                    ? "bg-red-100 text-red-800 dark:bg-red-600 dark:text-white"
+                    : riskScore > 40
+                    ? "bg-amber-100 text-amber-800 dark:bg-amber-600 dark:text-white"
+                    : "bg-emerald-100 text-emerald-800 dark:bg-emerald-600 dark:text-white"
+                }
+              >
+                Deadline Risk: {riskScore}%
+              </Badge>
+            )}
           </div>
         )}
       </div>
@@ -754,18 +930,36 @@ export default function EnhancedProjectDetailPage(): JSX.Element {
         </div>
       ) : project ? (
         <div className="space-y-6">
-          {/* Timeline / Progress */}
+          {/* Timeline card (now WITHOUT the risk badge) */}
           <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center">
-                <Clock className="h-5 w-5 mr-2 text-primary" />
-                Project Timeline
-              </CardTitle>
+            <CardHeader className="pb-2 flex items-center justify-between">
+              <div className="flex items-center">
+                <CardTitle className="flex items-center">
+                  <Clock className="h-5 w-5 mr-2 text-primary" />
+                  Project Timeline
+                </CardTitle>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-2"
+                onClick={() => setShowKickoff(true)}
+              >
+                <Wand2 className="h-4 w-4" />
+                Kick Off Project
+              </Button>
             </CardHeader>
             <CardContent>
-              <ProjectStatusProgress status={project.status} />
+              <UnifiedProjectTimeline projectStatus={project.status} tasks={timelineTasks} />
             </CardContent>
           </Card>
+
+          {/* KickoffAnalyzer dialog */}
+          <KickoffAnalyzer
+            open={showKickoff}
+            onOpenChange={setShowKickoff}
+            serviceType={project.service_type}
+          />
 
           {/* Engagement Letter */}
           <Card className="border-primary/20 bg-primary/5">
@@ -783,7 +977,7 @@ export default function EnhancedProjectDetailPage(): JSX.Element {
                     <FileText className="h-4 w-4 text-muted-foreground mr-2" />
                     <span className="text-sm">
                       {project.docs?.length || 0} document
-                      {project.docs?.length !== 1 ? "s" : ""} available
+                      {project.docs?.length !== 1 ? "s" : ""}
                     </span>
                   </div>
                   <div className="flex items-center">
@@ -814,14 +1008,11 @@ export default function EnhancedProjectDetailPage(): JSX.Element {
                 </div>
               </div>
 
-              {["Awaiting Signature", "Project Started", "Completed"].includes(
-                project.status
-              ) && (
+              {["Awaiting Signature", "Project Started", "Completed"].includes(project.status) && (
                 <div className="rounded-lg bg-amber-50 p-3 text-amber-800 flex items-start">
                   <AlertCircle className="h-4 w-4 mr-2 text-amber-500" />
                   <p>
-                    Engagement letter has already been sent. View it on the engagement
-                    letter page.
+                    Engagement letter has already been sent. View it on the engagement letter page.
                   </p>
                 </div>
               )}
@@ -885,7 +1076,7 @@ export default function EnhancedProjectDetailPage(): JSX.Element {
                   <div>
                     <p className="text-sm text-muted-foreground">Last Updated</p>
                     <p className="font-medium">
-                      {formatRelativeTime(project.updated_at)}
+                      {project.updated_at ? formatRelativeTime(project.updated_at) : "Unknown"}
                     </p>
                   </div>
                   <div>
@@ -906,43 +1097,35 @@ export default function EnhancedProjectDetailPage(): JSX.Element {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  <div>
-                    <div className="flex items-center justify-between mb-3">
-                      {renderStatusBadge(project.status)}
-                      <span className="text-xs text-muted-foreground">
-                        Since{" "}
-                        {project.updated_at
-                          ? new Date(project.updated_at).toLocaleDateString()
-                          : "Unknown"}
-                      </span>
-                    </div>
-                    <Separator className="my-3" />
-                    <p className="text-sm text-muted-foreground mb-1">
-                      Update Status Manually
-                    </p>
-                    <Select
-                      defaultValue={project.status}
-                      onValueChange={(value) => updateStatus(value)}
-                      disabled={statusUpdating}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Change status" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Onboarding">Onboarding</SelectItem>
-                        <SelectItem value="Docs Requested">Docs Requested</SelectItem>
-                        <SelectItem value="Docs Received">Docs Received</SelectItem>
-                        <SelectItem value="Pricing/Analysis">
-                          Pricing/Analysis
-                        </SelectItem>
-                        <SelectItem value="Awaiting Signature">
-                          Awaiting Signature
-                        </SelectItem>
-                        <SelectItem value="Project Started">Project Started</SelectItem>
-                        <SelectItem value="Completed">Completed</SelectItem>
-                      </SelectContent>
-                    </Select>
+                  <div className="flex items-center justify-between mb-3">
+                    {renderStatusBadge(project.status)}
+                    <span className="text-xs text-muted-foreground">
+                      Since{" "}
+                      {project.updated_at
+                        ? new Date(project.updated_at).toLocaleDateString()
+                        : "Unknown"}
+                    </span>
                   </div>
+                  <Separator className="my-3" />
+                  <p className="text-sm text-muted-foreground mb-1">Update Status Manually</p>
+                  <Select
+                    defaultValue={project.status}
+                    onValueChange={(value) => updateStatus(value)}
+                    disabled={statusUpdating}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Change status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Onboarding">Onboarding</SelectItem>
+                      <SelectItem value="Docs Requested">Docs Requested</SelectItem>
+                      <SelectItem value="Docs Received">Docs Received</SelectItem>
+                      <SelectItem value="Pricing/Analysis">Pricing/Analysis</SelectItem>
+                      <SelectItem value="Awaiting Signature">Awaiting Signature</SelectItem>
+                      <SelectItem value="Project Started">Project Started</SelectItem>
+                      <SelectItem value="Completed">Completed</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </CardContent>
               <CardFooter className="border-t pt-4">
@@ -1000,9 +1183,7 @@ export default function EnhancedProjectDetailPage(): JSX.Element {
                           </AvatarFallback>
                         </Avatar>
                         <div>
-                          <p className="font-medium">
-                            {staff ? staff.name : "Unknown Staff"}
-                          </p>
+                          <p className="font-medium">{staff ? staff.name : "Unknown Staff"}</p>
                           <div className="flex items-center mt-1">
                             <Badge className={`text-xs ${badge}`}>{label}</Badge>
                             <span className="text-xs text-muted-foreground ml-2">
@@ -1036,10 +1217,7 @@ export default function EnhancedProjectDetailPage(): JSX.Element {
                       {staffMembers.map((staff) => {
                         const checked = staffSelection.includes(staff.id);
                         return (
-                          <div
-                            key={staff.id}
-                            className="flex items-center justify-between"
-                          >
+                          <div key={staff.id} className="flex items-center justify-between">
                             <div className="flex items-center space-x-3">
                               <Checkbox
                                 id={`staff-${staff.id}`}
@@ -1077,12 +1255,8 @@ export default function EnhancedProjectDetailPage(): JSX.Element {
                                 </SelectTrigger>
                                 <SelectContent>
                                   <SelectItem value="staff">Staff</SelectItem>
-                                  <SelectItem value="point_of_contact">
-                                    Point of Contact
-                                  </SelectItem>
-                                  <SelectItem value="partner_assigned">
-                                    Partner Assigned
-                                  </SelectItem>
+                                  <SelectItem value="point_of_contact">Point of Contact</SelectItem>
+                                  <SelectItem value="partner_assigned">Partner Assigned</SelectItem>
                                 </SelectContent>
                               </Select>
                             )}
@@ -1092,16 +1266,14 @@ export default function EnhancedProjectDetailPage(): JSX.Element {
                     </div>
                   </div>
                   <DialogFooter>
-                    <Button onClick={handleStaffAssignment}>
-                      Save Staff Assignments
-                    </Button>
+                    <Button onClick={handleStaffAssignment}>Save Staff Assignments</Button>
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
             </CardFooter>
           </Card>
 
-          {/* Tabs: Tasks / Documents / Messages / Workflow */}
+          {/* TABS: Tasks / Documents / Messages / Workflow */}
           <Tabs defaultValue="tasks">
             <TabsList className="grid grid-cols-4 w-full md:w-2/3">
               <TabsTrigger value="tasks">Tasks</TabsTrigger>
@@ -1119,13 +1291,26 @@ export default function EnhancedProjectDetailPage(): JSX.Element {
                   Add Task
                 </Button>
               </div>
-              {/* If needed, render the list of tasks here */}
-              {/* e.g., project.tasks?.map(...) */}
+
+              {/* Task Scheduler */}
+              <TaskScheduler
+                project={project}
+                staffMembers={staffMembers}
+                onTaskScheduled={(updatedTask) => {
+                  setTimelineTasks((prev) => [...prev, updatedTask]);
+                }}
+              />
+
+              {/* Q&A (AI Chat) at the bottom of the Tasks tab */}
+              <QAComponent projectId={project.id} />
             </TabsContent>
 
             {/* Documents Tab */}
             <TabsContent value="documents" className="space-y-4 mt-2">
               <EnhancedDocumentsTab project={project} />
+
+              {/* Q&A (AI Chat) at the bottom of the Documents tab */}
+              <QAComponent projectId={project.id} />
             </TabsContent>
 
             {/* Messages Tab */}
@@ -1146,10 +1331,7 @@ export default function EnhancedProjectDetailPage(): JSX.Element {
                     {project.messages && project.messages.length > 0 ? (
                       <div className="space-y-4">
                         {project.messages.map((message) => (
-                          <div
-                            key={message.id}
-                            className="flex items-start space-x-3"
-                          >
+                          <div key={message.id} className="flex items-start space-x-3">
                             <Avatar className="h-8 w-8">
                               <AvatarFallback>
                                 {message.sender === "staff" ? "S" : "C"}
@@ -1164,13 +1346,9 @@ export default function EnhancedProjectDetailPage(): JSX.Element {
                                       : "Staff"
                                     : `${project.client_name} (Client)`}
                                 </p>
-                                <span className="mx-2 text-xs text-muted-foreground">
-                                  •
-                                </span>
+                                <span className="mx-2 text-xs text-muted-foreground">•</span>
                                 <p className="text-xs text-muted-foreground">
-                                  {message.timestamp
-                                    ? formatRelativeTime(message.timestamp)
-                                    : ""}
+                                  {message.timestamp ? formatRelativeTime(message.timestamp) : ""}
                                 </p>
                               </div>
                               <p className="text-sm">{message.text}</p>
@@ -1186,10 +1364,7 @@ export default function EnhancedProjectDetailPage(): JSX.Element {
                   </ScrollArea>
                 </CardContent>
                 <CardFooter className="border-t pt-4">
-                  <Link
-                    href={`/staff/messages?project_id=${project.id}`}
-                    className="w-full"
-                  >
+                  <Link href={`/staff/messages?project_id=${project.id}`} className="w-full">
                     <Button className="w-full gap-2">
                       <MessageSquare className="h-4 w-4" />
                       Go to Message Center
@@ -1197,6 +1372,9 @@ export default function EnhancedProjectDetailPage(): JSX.Element {
                   </Link>
                 </CardFooter>
               </Card>
+
+              {/* Q&A (AI Chat) at the bottom of the Messages tab */}
+              <QAComponent projectId={project.id} />
             </TabsContent>
 
             {/* Workflow Tab */}
@@ -1212,29 +1390,18 @@ export default function EnhancedProjectDetailPage(): JSX.Element {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <ServiceSpecificViews project={project} onUpdateStatus={updateStatus} />
+                  <ServiceSpecificViews
+                    project={project}
+                    onUpdateStatus={updateStatus}
+                    onTasksChange={setTimelineTasks}
+                  />
                 </CardContent>
               </Card>
+
+              {/* Q&A (AI Chat) at the bottom of the Workflow tab */}
+              <QAComponent projectId={project.id} />
             </TabsContent>
           </Tabs>
-
-          {/* Q&A Component */}
-          <QAComponent projectId={project.id} />
-
-          {/* Task Scheduler (unchanged).
-              This example shows how you might handle scheduled tasks if you have that flow. */}
-          <TaskScheduler
-            project={project}
-            staffMembers={staffMembers}
-            onTaskScheduled={(updatedTask) => {
-              if (project && project.tasks) {
-                const updatedTasks = project.tasks.map((t) =>
-                  t.id === updatedTask.id ? updatedTask : t
-                );
-                setProject({ ...project, tasks: updatedTasks });
-              }
-            }}
-          />
         </div>
       ) : (
         <Card>
