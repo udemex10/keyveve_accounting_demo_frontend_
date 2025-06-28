@@ -57,7 +57,7 @@ interface StaffMember {
 }
 
 // API base URL
-const API_BASE_URL = "https://keyveve-accounting-demo-backend.onrender.com";
+const API_BASE_URL = "http://localhost:8000";
 
 /* ────────────────────────────────────────────────────────────────────────────
    Inner component (contains the original logic that calls useSearchParams)

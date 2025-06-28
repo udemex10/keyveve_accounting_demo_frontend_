@@ -35,19 +35,36 @@ import {
   ExternalLink,
   ArrowRightLeft,
   RefreshCw,
-  Cloud
+  Cloud,
+  StickyNote,
+  Plus,
+  Trash2
 } from "lucide-react";
 
-const API_BASE_URL = "https://keyveve-accounting-demo-backend.onrender.com";
+/* ------------------------------------------------------------------
+   Constants & Types
+-------------------------------------------------------------------*/
+const API_BASE_URL = "http://localhost:8000"; // still used for scheduling
 
 // Calendar integration statuses
 const CALENDAR_INTEGRATIONS = {
   outlook: { name: "Outlook Calendar", color: "blue" },
-  google: { name: "Google Calendar", color: "red" }
+  google: { name: "Google Calendar", color: "red" },
 };
+
+interface Note {
+  id: string; // uuid
+  author: string;
+  text: string;
+  timestamp: string; // ISO
+}
 
 const TaskScheduler = ({ project, staffMembers, onTaskScheduled }) => {
   const { toast } = useToast();
+
+  /* ------------------------------------------------------------------
+   * Scheduling related state (existing)
+   * ------------------------------------------------------------------*/
   const [selectedTask, setSelectedTask] = useState(null);
   const [schedulerOpen, setSchedulerOpen] = useState(false);
   const [staffId, setStaffId] = useState("");
@@ -59,61 +76,77 @@ const TaskScheduler = ({ project, staffMembers, onTaskScheduled }) => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [syncStatus, setSyncStatus] = useState({ syncing: false, lastSynced: null });
   const [calendarEvents, setCalendarEvents] = useState([]);
-
-  // Mock calendar integration status (would come from API in real app)
   const [integrationStatus, setIntegrationStatus] = useState({
     outlook: true,
     google: false
   });
 
-  useEffect(() => {
-    // Simulating loading calendar events from backend
-    // This would fetch events from integrations in a real app
-    const loadEvents = async () => {
-      if (!project?.tasks) return;
+  /* ---------------- local notes state ---------------- */
+  const [notesDialogOpen, setNotesDialogOpen] = useState(false);
+  const [noteInput, setNoteInput] = useState("");
+  const [selectedTaskForNotes, setSelectedTaskForNotes] = useState(null);
+  const [notesByTask, setNotesByTask] = useState<{ [taskId: number]: Note[] }>(
+    {}
+  );
 
-      try {
-        const events = [];
+  /* ---------------- helper fns ---------------- */
+  const getStaffName = (id) =>
+    staffMembers.find((s) => s.id === id)?.name || "Unknown";
 
-        project.tasks.forEach(task => {
-          if (task.scheduled_start) {
-            events.push({
-              id: `task-${task.id}`,
-              title: task.title,
-              start: new Date(task.scheduled_start),
-              end: task.scheduled_end ? new Date(task.scheduled_end) : null,
-              assignee: task.assigned_to?.[0] || null,
-              calendarType: "outlook", // Mocked for demo
-              status: task.status,
-              taskId: task.id
-            });
-          }
-        });
-
-        setCalendarEvents(events);
-      } catch (error) {
-        console.error("Error loading calendar events:", error);
-      }
+  const addLocalNote = () => {
+    if (!noteInput.trim() || !selectedTaskForNotes) return;
+    const newNote: Note = {
+      id: crypto.randomUUID(),
+      author: "You", // or current user
+      text: noteInput.trim(),
+      timestamp: new Date().toISOString(),
     };
+    setNotesByTask((prev) => {
+      const existing = prev[selectedTaskForNotes.id] || [];
+      return { ...prev, [selectedTaskForNotes.id]: [...existing, newNote] };
+    });
+    setNoteInput("");
+  };
 
-    loadEvents();
+  const deleteLocalNote = (taskId: number, noteId: string) => {
+    setNotesByTask((prev) => ({
+      ...prev,
+      [taskId]: prev[taskId].filter((n) => n.id !== noteId),
+    }));
+  };
+
+  /* ------------------------------------------------------------------
+   * Effects – load calendar events
+   * ------------------------------------------------------------------*/
+  useEffect(() => {
+    if (!project?.tasks) return;
+    const events = [];
+    project.tasks.forEach((task) => {
+      if (task.scheduled_start) {
+        events.push({
+          id: `task-${task.id}`,
+          title: task.title,
+          start: new Date(task.scheduled_start),
+          end: task.scheduled_end ? new Date(task.scheduled_end) : null,
+          assignee: task.assigned_to?.[0] || null,
+          calendarType: "outlook", // mocked
+          status: task.status,
+          taskId: task.id,
+        });
+      }
+    });
+    setCalendarEvents(events);
   }, [project]);
 
-  // Handle task selection for scheduling
+  /* ------------------------------------------------------------------
+   * Handlers – scheduling
+   * ------------------------------------------------------------------*/
   const handleSelectTask = (task) => {
     setSelectedTask(task);
     setStaffId(task.assigned_to?.[0] || "");
-
-    if (task.scheduled_start) {
-      setStartDate(new Date(task.scheduled_start));
-    }
-
-    if (task.scheduled_end) {
-      setEndDate(new Date(task.scheduled_end));
-    } else {
-      setEndDate(addDays(startDate, 1));
-    }
-
+    if (task.scheduled_start) setStartDate(new Date(task.scheduled_start));
+    if (task.scheduled_end) setEndDate(new Date(task.scheduled_end));
+    else setEndDate(addDays(new Date(task.scheduled_start || new Date()), 1));
     setSchedulerOpen(true);
   };
 
@@ -279,6 +312,76 @@ const TaskScheduler = ({ project, staffMembers, onTaskScheduled }) => {
     }
   };
 
+  /* ---------------- notes dialog renderer ---------------- */
+  const renderNotesDialog = () => (
+    <Dialog open={notesDialogOpen} onOpenChange={setNotesDialogOpen}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <StickyNote className="h-5 w-5 text-primary" /> Notes for "
+            {selectedTaskForNotes?.title}"
+          </DialogTitle>
+          <DialogDescription>
+            Add quick internal notes. They stay only in this session.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-4 max-h-72 overflow-y-auto">
+          {(notesByTask[selectedTaskForNotes?.id] || []).map((note) => (
+            <div
+              key={note.id}
+              className="border rounded-md p-3 bg-muted/30 flex items-start gap-3"
+            >
+              <Avatar className="h-8 w-8">
+                <AvatarFallback className="text-xs">
+                  {note.author.charAt(0)}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1">
+                <div className="flex justify-between items-center">
+                  <span className="font-medium text-sm">{note.author}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {format(new Date(note.timestamp), "MMM d, yyyy h:mma")}
+                  </span>
+                </div>
+                <p className="text-sm mt-1 whitespace-pre-wrap">{note.text}</p>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 p-0"
+                onClick={() => deleteLocalNote(selectedTaskForNotes.id, note.id)}
+              >
+                <Trash2 className="h-3 w-3" />
+              </Button>
+            </div>
+          ))}
+
+          {/* Add note input */}
+          <div className="flex items-start gap-2">
+            <Input
+              placeholder="Add a note..."
+              value={noteInput}
+              onChange={(e) => setNoteInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") addLocalNote();
+              }}
+            />
+            <Button onClick={addLocalNote} className="gap-1">
+              <Plus className="h-4 w-4" /> Add
+            </Button>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setNotesDialogOpen(false)}>
+            Close
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+
   // Generate calendar grid for month view
   const generateCalendarGrid = () => {
     const year = currentMonth.getFullYear();
@@ -394,12 +497,6 @@ const TaskScheduler = ({ project, staffMembers, onTaskScheduled }) => {
         </ScrollArea>
       </div>
     );
-  };
-
-  // Get staff member name by ID
-  const getStaffName = (staffId) => {
-    const staff = staffMembers.find(s => s.id === staffId);
-    return staff ? staff.name : "Unknown";
   };
 
   return (
@@ -541,7 +638,7 @@ const TaskScheduler = ({ project, staffMembers, onTaskScheduled }) => {
                     <TableHead>Assigned To</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Scheduled</TableHead>
-                    <TableHead className="text-right">Action</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -595,15 +692,26 @@ const TaskScheduler = ({ project, staffMembers, onTaskScheduled }) => {
                           )}
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="gap-2"
-                            onClick={() => handleSelectTask(task)}
-                          >
-                            <CalendarIcon className="h-4 w-4" />
-                            Schedule
-                          </Button>
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="gap-1"
+                              onClick={() => { setSelectedTaskForNotes(task); setNotesDialogOpen(true); }}
+                            >
+                              <StickyNote className="h-4 w-4" />
+                              Notes
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="gap-2"
+                              onClick={() => handleSelectTask(task)}
+                            >
+                              <CalendarIcon className="h-4 w-4" />
+                              Schedule
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))
@@ -879,6 +987,9 @@ const TaskScheduler = ({ project, staffMembers, onTaskScheduled }) => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Render the notes dialog (logic defined in helper function) */}
+      {renderNotesDialog()}
     </div>
   );
 };

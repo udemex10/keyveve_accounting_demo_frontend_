@@ -41,7 +41,7 @@ import {
   ExternalLink
 } from "lucide-react";
 
-const API_BASE_URL = "https://keyveve-accounting-demo-backend.onrender.com";
+const API_BASE_URL = "http://localhost:8000";
 
 // Default project structure for when project is undefined
 const defaultProject = {
