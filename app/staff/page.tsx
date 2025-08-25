@@ -87,7 +87,7 @@ import NewClientsTable from "@/components/NewClientsTable";
 // -- existing imports continue …                                   //
 
 // API base URL
-const API_BASE_URL = "http://localhost:8000";
+const API_BASE_URL = "https://keyveve-accounting-demo-backend.onrender.com";
 
 // Project status options
 const PROJECT_STATUSES = [

@@ -43,7 +43,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 // Import the enhanced service views component:
 import ClientPortalServiceViews from "@/components/ClientPortalServiceViews";
 
-const API_BASE_URL = "http://localhost:8000";
+const API_BASE_URL = "https://keyveve-accounting-demo-backend.onrender.com";
 
 const PROJECT_STATUSES = [
   "Onboarding",
